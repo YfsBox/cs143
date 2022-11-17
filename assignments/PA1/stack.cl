@@ -35,9 +35,17 @@ class StackValue {
       }
    };
 
+   getvalue(ty : String, num : Int) : StackValue {
+     {
+         type <- ty;
+         num <- number;
+         self;
+     } 
+   };
+
    gettype(): String {
       {
-        "ok";
+        type;
       }
    };
 
@@ -69,6 +77,15 @@ class StackValue {
       {
         type <- tp;
         true;
+      }
+   };
+
+   initvalue(tp : String, num : Int) : StackValue {
+      let val : StackValue in {
+         val <- (new StackValue);
+         val.setnumber(num);
+         val.settype(tp);
+         val;
       }
    };
 };
@@ -140,18 +157,67 @@ class Stack {
             top <- node;
             node;
           };
+          -- (new IO).out_string((new A2I).i2a(cnt));
           true;
       }
    };
 
-   pop(): StackNode {
+   popadd(): StackNode {
       let node : StackNode in {
-         if 0 < cnt then {
+         let nodea : StackNode,nodeb : StackNode, stra :String, strb : String, sum : Int in {
+            nodea <- top;
+            nodeb <- nodea.getnext();
+            stra <- nodea.getvalstr();
+            strb <- nodeb.getvalstr();
+            sum <- (new A2I).a2i_aux(stra) + (new A2I).a2i_aux(strb);
+            top <- nodeb;
             cnt <- cnt - 1;
-            node <- top;
-            top <- top.getnext();
+            nodeb.setvalue((new StackValue).initvalue("int",sum));
+            sum;
+         };
+         node;
+      }
+   };
+
+   popswap(): StackNode {
+      let node : StackNode in {
+            let nodea : StackNode,nodeb : StackNode, vala :StackValue, valb : StackValue, sum : Int in {
+            nodea <- top;
+            nodeb <- nodea.getnext();
+            vala <- nodea.getval();
+            valb <- nodeb.getval();
+            nodea.setvalue(valb);
+            nodeb.setvalue(vala);
+            sum;
+         };
+         node;
+      }
+   };
+
+   pop(): StackNode {
+      let node : StackNode <- top in {
+         if 0 < cnt then {
+            if (node.getval().gettype() = "int") then {
+               node;
+            } else {
+               cnt <- cnt - 1;
+               node <- top;
+               let toptype : String in {
+                  toptype <- node.getval().gettype();
+                  if (toptype = "+") then {
+                     top <- top.getnext();
+                     popadd();
+                  } else if (toptype = "s") then {
+                     top <- top.getnext();
+                     popswap();
+                  } else {
+                     (new IO).out_string("123");
+                  } fi fi;
+                  toptype;
+               };
+            } fi;
          } else {
-            abort();
+            node;
          } fi;
          node;
       }
@@ -187,29 +253,35 @@ class Stack {
 class Main inherits IO {
    stack : Stack;   
    execcmd(cmd : String) : Bool {
-      {
-        if (cmd = "x") then { abort();} else 
+      let ret : Bool <- true in {
+        if (cmd = "x") then { 
+         ret <- false;
+        } else 
         if (cmd = "d") then { 
             stack.show();
         } else 
         if (cmd = "e") then { 
-            (new IO).out_string("pop\n");
+            stack.pop();
          } else {
             stack.push(cmd);
         } fi fi fi;
-        true;
+        ret;
       }
    };
 
    main() : Object {
-       let command : String in {
+       let command : String, flag : Bool <- true in {
          stack <- (new Stack).init();
-         while (true) loop {
-            (new IO).out_string(">");
+         (new IO).out_string(">");
+         while (flag = true) loop {
             command <- (new IO).in_string();
-            execcmd(command);
+            if (execcmd(command) = false) then {
+                flag <- false;
+            } else {
+                (new IO).out_string(">");
+            } fi;
           } pool;
-         command;
+         false;
       }
    };
 
