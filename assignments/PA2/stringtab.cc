@@ -14,6 +14,7 @@ extern char *pad(int n);
 // Explicit template instantiations.
 // Comment out for versions of g++ prior to 2.7
 //
+// StringTable是三个模版类，有三种类型，分别表示的IdEntry，StringEntry，IntEntry
 template class StringTable<IdEntry>;
 template class StringTable<StringEntry>;
 template class StringTable<IntEntry>;
@@ -22,12 +23,12 @@ Entry::Entry(char *s, int l, int i) : len(l), index(i) {
   str = new char [len+1];
   strncpy(str, s, len);
   str[len] = '\0';
-}
+} // 将字符串进行拷贝
 
 int Entry::equal_string(char *string, int length) const
 {
   return (len == length) && (strncmp(str,string,len) == 0);
-}
+}  // 判断该条目的内容和指定的字符串是否是相等的
 
 ostream& Entry::print(ostream& s) const
 {
@@ -77,3 +78,5 @@ IntEntry::IntEntry(char *s, int l, int i) : Entry(s,l,i) { }
 IdTable idtable;
 IntTable inttable;
 StrTable stringtable;
+// 这三个全局变量是相当重要的，后面对于识别出来的token都需要做一个将token对应的字符串加入到相应的表中的动作
+

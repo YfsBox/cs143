@@ -26,7 +26,7 @@ extern ostream& operator<<(ostream& s, Symbol sym);
 //
 /////////////////////////////////////////////////////////////////////////
 
-class Entry {
+class Entry {   // 维护了一个字符串,以及和这个字符串有关的信息
 protected:
   char *str;     // the string
   int  len;      // the length of the string (without trailing \0)
@@ -88,11 +88,11 @@ typedef IntEntry *IntEntryP;
 //  String Tables
 //
 //////////////////////////////////////////////////////////////////////////
-
+// String 对于识别出来的token则需要登记进入String Table
 template <class Elem> 
 class StringTable
 {
-protected:
+protected:  // protect一般只是结合继承进行使用
    List<Elem> *tbl;   // a string table is a list
    int index;         // the current index
 public:
