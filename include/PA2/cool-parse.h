@@ -130,11 +130,11 @@ typedef Cases_class *Cases;
 #define DARROW 272
 #define NEW 273
 #define ISVOID 274
-#define STR_CONST 275
-#define INT_CONST 276
+#define STR_CONST 275 // ?
+#define INT_CONST 276 // ?
 #define BOOL_CONST 277
-#define TYPEID 278
-#define OBJECTID 279
+#define TYPEID 278 // ?
+#define OBJECTID 279 // ?
 #define ASSIGN 280
 #define NOT 281
 #define LE 282

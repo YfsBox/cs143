@@ -42,154 +42,144 @@ extern YYSTYPE cool_yylval;
  */
 
 %}
-
+%option noyywrap
 /*
  * Define names for regular expressions here.
  */
-white       [\t\n\f\r\v ]
 digit       [0-9]
 capital     [A-Z]
 lowcase     [a-z]
 letter      {capital}|{lowcase}
 lcomment    "(*"
 rcomment    "*)"
-commentele  .|\n
-
-CLASS           "class"
-ELSE            "else"
-FI              "fi"
-IF              "if"
-IN              "in"
-INHERITS        "inherits"
-LET             "let"
-LOOP            "loop"
-POOL            "pool"
-THEN            "then"
-WHILE           "while"
-CASE            "case"
-ESAC            "esac"
-OF              "of"
+commentele  .|"\n"
+/* keyword */
+WHITE           ([^ \t\n\r\a]+)
+CLASS           [cC][lL][aA][sS][sS]
+ELSE            [eE][lL][sS][eE]
+FI              [fF][iI]
+IF              [iI][fF]
+IN              [iI][nN]
+INHERITS        [iI][nN][hH][eE][rR][iI][tT][sS]
+LET             [lL][eE][tT]
+LOOP            [lL][oO][oO][pP]
+POOL            [pP][oO][oO][lL]
+THEN            [tT][hH][eE][hH]
+WHILE           [wW][hH][iI][lL][eE]
+CASE            [cC][aA][sS][eE]
+ESAC            [eE][sS][aA][cC]
+OF              [oO][fF]
+NEW             [nN][eE][wW]
+ISVOID          [iI][sS][vV][oO][iI][dD]
+NOT             [nN][oO][tT]
+TRUE_CONST      [t][rR][uU][eE]
+FALSE_CONST     [f][aA][lL][sS][eE]
+BOOL_CONST      {TRUE_CONST}|{FALSE_CONST}
+/* operators*/
 DARROW          =>
-NEW             "new"
-ISVOID          "isvoid"
-INT_CONST       {digit}+
-BOOL_CONST      "true"|"false"
+LE              <=
+ASSIGN          <-
+/* constant or identifier */
+INT_CONST       [0-9][0-9]*
 TYPEID          "Int"|"Bool"|"String"
 OBJECTID        {capital}({letter}|{digit}|_)*
-ASSIGN          "<-"
-NOT             "not"
-LE              "<="
-
 %%
  /*
-  *  Nested comments
+  *  Nested comments 关于注释的处理,包含嵌套注释
   */
 
  /*
-  *  The multiple-character operators.
+  *  The multiple-character operators. 各种运算符的定义和匹配
   */
-"\n" {
-   curr_lineno += 1;
-}
-
 {DARROW} {
     return (DARROW);
-}
-{CLASS} {
-    return (CLASS);
-}
-{ELSE} {
-    return (ELSE);
-}
-{FI} {
-    return (FI);
-}
-{IF} {
-    return (IF);
-}
-{IN} {
-    return (IN);
-}
-{INHERITS} {
-    return (INHERITS);
-}
-{LET} {
-    return (LET);
-}
-{LOOP} {
-    return (LOOP);
-}
-{POOL} {
-    return (POOL);
-}
-{THEN} {
-    return (THEN);
-}
-{WHILE} {
-    return (WHILE);
-}
-{CASE} {
-    return (CASE);
-}
-{ESAC} {
-    return (ESAC);
-}
-{OF} {
-    return (OF);
-}
-{NEW} {
-    return (NEW);
-}
-{ISVOID} {
-    return (ISVOID);
-}
-{INT_CONST} {
-    return (INT_CONST);
-}
-{ASSIGN} {
-    return (ASSIGN);
-}
-{NOT} {
-    return (NOT);
 }
 {LE} {
     return (LE);
 }
-{INT_CONST} {
-    return (INT_CONST);
+{ASSIGN} {
+    return (ASSIGN);
 }
-{BOOL_CONST} {
-    return (BOOL_CONST);
-}
-{TYPEID} {
-    return (TYPEID);
-}
-{OBJECTID} {
-    return (ONJECTID);
-}
-
  /*
   * Keywords are case-insensitive except for the values true and false,
   * which must begin with a lower-case letter.
   */
-
-
+{CLASS} {
+return (CLASS);
+}
+{ELSE} {
+return (ELSE);
+}
+{FI} {
+return (FI);
+}
+{IF} {
+return (IF);
+}
+{IN} {
+return (IN);
+}
+{INHERITS} {
+return (INHERITS);
+}
+{LET} {
+return (LET);
+}
+{LOOP} {
+return (LOOP);
+}
+{POOL} {
+return (POOL);
+}
+{THEN} {
+return (THEN);
+}
+{WHILE} {
+return (WHILE);
+}
+{CASE} {
+return (CASE);
+}
+{ESAC} {
+return (ESAC);
+}
+{OF} {
+return (OF);
+}
+{NEW} {
+return (NEW);
+}
+{ISVOID} {
+return (ISVOID);
+}
+{NOT} {
+    return (NOT);
+}
  /*
   *  String constants (C syntax)
   *  Escape sequence \c is accepted for all characters c. Except for 
   *  \n \t \b \f, the result is c.
   *
   */
+{WHITE};
+"\n" {
+    curr_lineno += 1;
+}
 
+[0-9][0-9]* {
+    return (INT_CONST);
+}
+{BOOL_CONST} {
+return (BOOL_CONST);
+}
+{TYPEID} {
+return (TYPEID);
+}
+{OBJECTID} {
+return (OBJECTID);
+}
+<<EOF>> {
+return 0;
+}
 
 %%
-
-int main() {
-    if (argc > 2) {
-        printf("error");
-    } else {
-        yyin = fopen(argv[1], "rb+");
-    }
-    yylex();
-    return 0;
-}
