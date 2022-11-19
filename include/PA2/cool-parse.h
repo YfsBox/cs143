@@ -188,3 +188,8 @@ typedef struct YYLTYPE
 
 extern YYLTYPE cool_yylloc;
 #endif
+
+
+// 这里面有表示line和col信息的YYLTYPE结构体
+// 有需要进行正则表达的各种token的类型的编号的宏定义
+// 还有symbol的联合体
