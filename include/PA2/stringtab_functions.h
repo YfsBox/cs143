@@ -10,7 +10,6 @@
 
 #include "stringtab.h"
 #include <stdio.h>
-
 //
 // A string table is implemented a linked list of Entrys.  Each Entry
 // in the list has a unique string.

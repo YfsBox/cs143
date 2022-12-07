@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="HuaWeiYun (b906d694-d99f-40cd-b6c6-a7dde3d5cd73)" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="docker busdb (9e2aaf46-4d51-490a-a945-668b69d614e3)" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
       <paths name="HuaWeiYun (b906d694-d99f-40cd-b6c6-a7dde3d5cd73)">
         <serverdata>
           <mappings>
             <mapping deploy="/usr/class/cool" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="docker busdb (9e2aaf46-4d51-490a-a945-668b69d614e3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/usr/class/cool" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

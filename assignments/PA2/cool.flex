@@ -75,16 +75,29 @@ FALSE_CONST     [f][aA][lL][sS][eE]
 TYPEID          {capital}({letter}|{digit}|_)*
 OBJECTID        {lowcase}({letter}|{digit}|_)*
 /* comments */
-comment     "--"
 lcomment    "(*"
 rcomment    "*)"
 commentele  .|"\n"
-COMMENT_LINE    {comment}.*
+COMMENT_LINE    --.*
+%x COMMENT
+
 %%
- /*
-  *  Nested comments 关于注释的处理,包含嵌套注释
-  */
-{COMMENT_LINE} {}
+// comment and nested comment
+"(*"{
+    BEGIN COMMENT;
+};
+<COMMENT>"*)" {
+    BEGIN INITIAL;
+};
+<COMMENT>[^*\n]*        /* eat anything that's not a '*' */
+<COMMENT>"*"+[^*/\n]*   /* eat up '*'s not followed by '/'s */
+<COMMENT>\n  {
+    curr_lineno++;
+};
+
+{COMMENT_LINE} {
+
+}
 
 
  /*
