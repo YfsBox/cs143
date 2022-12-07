@@ -51,7 +51,7 @@ capital     [A-Z]
 lowcase     [a-z]
 letter      {capital}|{lowcase}
 /* keyword */
-WHITE           [^ \t\n\r\a]
+WHITE           [ \t\f\r\v]
 CLASS           [cC][lL][aA][sS][sS]
 ELSE            [eE][lL][sS][eE]
 FI              [fF][iI]
@@ -61,7 +61,7 @@ INHERITS        [iI][nN][hH][eE][rR][iI][tT][sS]
 LET             [lL][eE][tT]
 LOOP            [lL][oO][oO][pP]
 POOL            [pP][oO][oO][lL]
-THEN            [tT][hH][eE][hH]
+THEN            [tT][hH][eE][nN]
 WHILE           [wW][hH][iI][lL][eE]
 CASE            [cC][aA][sS][eE]
 ESAC            [eE][sS][aA][cC]
@@ -89,9 +89,12 @@ BACKSPACE   '\b'
 TAB         '\t'
 NEWLINE     '\n'
 FORMFEED    '\f'
-ESCAPE_SYM  (\\b|\\t|\\n|\\f)*
+ESCAPE_SYM  (\\b|\\t|\\n|\\f)
 
 %%
+{COMMENT_LINE} {
+}
+
 {COMMENT_BEGIN} {
     BEGIN(COMMENT);
 }
@@ -108,7 +111,8 @@ ESCAPE_SYM  (\\b|\\t|\\n|\\f)*
     ++curr_lineno;
 }
 <COMMENT><<EOF>> {
-    cool_yylval.error_msg = "not find a comment_end until eof";
+    cool_yylval.error_msg = "EOF in comment";
+    BEGIN(INITIAL);
     return (ERROR);
 }
 {QUOTATION} {
@@ -122,14 +126,33 @@ ESCAPE_SYM  (\\b|\\t|\\n|\\f)*
     return (STR_CONST);
 }
 <STRING>{ESCAPE_SYM} {
-    string_vec.insert(string_vec.end(), yytext, yytext + yyleng);
-}
-<STRING>\\0 {
-    cool_yylval.error_msg = "contain a null character";
-    return (ERROR);
-}
-<STRING>\\. {
-    string_vec.push_back(yytext[1]);
+    switch (yytext[1]) {
+        case 'b': {
+            string_vec.push_back('\b');
+            break;
+        }
+        case 'n': {
+            string_vec.push_back('\n');
+            break;
+        }
+        case 't': {
+            string_vec.push_back('\t');
+            break;
+        }
+        case 'f': {
+            string_vec.push_back('\f');
+            break;
+        }
+        case '0': {
+            cool_yylval.error_msg = "contain a null character";
+            return (ERROR);
+        }
+        default: {
+            string_vec.push_back(yytext[1]);
+            break;
+        }
+    }
+    // string_vec.insert(string_vec.end(), yytext, yytext + yyleng);
 }
 <STRING>. {
     string_vec.push_back(yytext[0]);
@@ -214,7 +237,9 @@ ESCAPE_SYM  (\\b|\\t|\\n|\\f)*
   *  \n \t \b \f, the result is c.
   *
   */
-{WHITE};
+{WHITE} {
+
+}
 "\n" {
     curr_lineno += 1;
 }
@@ -240,5 +265,57 @@ ESCAPE_SYM  (\\b|\\t|\\n|\\f)*
 }
 <<EOF>> {
     return 0;
+}
+"{" {
+    return '{';
+}
+"}" {
+    return '}';
+}
+":" {
+    return ':';
+}
+"(" {
+    return '(';
+}
+")" {
+    return ')';
+}
+";" {
+    return ';';
+}
+"=" {
+    return '=';
+}
+"<" {
+    return '<';
+}
+"." {
+    return '.';
+}
+"," {
+    return ',';
+}
+"~" {
+    return '~';
+}
+"-" {
+    return '-';
+}
+"+" {
+    return '+';
+}
+"*" {
+    return '*';
+}
+"/" {
+    return '/';
+}
+"@" {
+    return '@';
+}
+. {
+    cool_yylval.error_msg = yytext;
+    return (ERROR);
 }
 %%
