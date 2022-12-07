@@ -1,6 +1,7 @@
 import os
 
-coolfile = "../../examples/list.cl"
+coolfile = "../../examples/arith.cl"
+print(coolfile)
 myOutput = os.popen("./lexer {}".format(coolfile)).read()
 stdOutput = os.popen("../../bin/.i686/lexer {}".format(coolfile)).read()
 

@@ -89,7 +89,7 @@ BACKSPACE   '\b'
 TAB         '\t'
 NEWLINE     '\n'
 FORMFEED    '\f'
-ESCAPE_SYM  (\\b|\\t|\\n|\\f)
+ESCAPE_SYM  \\.
 
 %%
 {COMMENT_LINE} {
@@ -105,8 +105,10 @@ ESCAPE_SYM  (\\b|\\t|\\n|\\f)
     cool_yylval.error_msg = "find a commend_end error!";
     return (ERROR);
 }
-<COMMENT>[^*\n]*        /* eat anything that's not a '*' */
-<COMMENT>"*"+[^*/\n]*   /* eat up '*'s not followed by '/'s */
+<COMMENT>[^*\n]* {
+}       /* eat anything that's not a '*' */
+<COMMENT>"*"+[^*)\n]* {
+}  /* eat up '*'s not followed by '/'s */
 <COMMENT>"\n" {
     ++curr_lineno;
 }
@@ -143,16 +145,19 @@ ESCAPE_SYM  (\\b|\\t|\\n|\\f)
             string_vec.push_back('\f');
             break;
         }
-        case '0': {
-            cool_yylval.error_msg = "contain a null character";
-            return (ERROR);
+        case '\\': {
+            string_vec.push_back('\\');
+            break;
+        }
+        case '\"': {
+            string_vec.push_back('\"');
+            break;
         }
         default: {
             string_vec.push_back(yytext[1]);
             break;
         }
     }
-    // string_vec.insert(string_vec.end(), yytext, yytext + yyleng);
 }
 <STRING>. {
     string_vec.push_back(yytext[0]);
