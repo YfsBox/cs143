@@ -10,6 +10,7 @@
 #include <cool-parse.h>
 #include <stringtab.h>
 #include <utilities.h>
+#include <vector>
 /* The compiler assumes these identifiers. */
 #define yylval cool_yylval  // 用来描述第一行和最后一行的信息以及column的信息，这个是需要我们进行维护的
 #define yylex  cool_yylex   // 一个函数
@@ -29,6 +30,7 @@ extern FILE *fin; /* we read from this file */
 
 char string_buf[MAX_STR_CONST]; /* to assemble string constants */
 char *string_buf_ptr; // 用来组合字符串的常量
+std::vector<char> string_vec;
 
 extern int curr_lineno; // 当前的行号
 extern int verbose_flag;
@@ -40,6 +42,7 @@ extern YYSTYPE cool_yylval;  // 用来表示当前的YYSTYPE
 
 %option noyywrap
 %x COMMENT
+%x STRING
 /*
  * Define names for regular expressions here.
  */
@@ -79,8 +82,14 @@ OBJECTID        {lowcase}({letter}|{digit}|_)*
 /* comments,参考flex手册即可写个大概 */
 COMMENT_BEGIN    "(*"
 COMMENT_END    "*)"
-commentele  .|"\n"
 COMMENT_LINE    --.*
+QUOTATION    \"
+
+BACKSPACE   '\b'
+TAB         '\t'
+NEWLINE     '\n'
+FORMFEED    '\f'
+ESCAPE_SYM  (\\b|\\t|\\n|\\f)*
 
 %%
 {COMMENT_BEGIN} {
@@ -98,11 +107,42 @@ COMMENT_LINE    --.*
 <COMMENT>"\n" {
     ++curr_lineno;
 }
+<COMMENT><<EOF>> {
+    cool_yylval.error_msg = "not find a comment_end until eof";
+    return (ERROR);
+}
+{QUOTATION} {
+    string_vec.clear();
+    BEGIN(STRING);
+}
+
+<STRING>{QUOTATION} {
+    cool_yylval.symbol = stringtable.add_string(&string_vec[0], string_vec.size());
+    BEGIN(INITIAL);
+    return (STR_CONST);
+}
+<STRING>{ESCAPE_SYM} {
+    string_vec.insert(string_vec.end(), yytext, yytext + yyleng);
+}
+<STRING>\\0 {
+    cool_yylval.error_msg = "contain a null character";
+    return (ERROR);
+}
+<STRING>\\. {
+    string_vec.push_back(yytext[1]);
+}
+<STRING>. {
+    string_vec.push_back(yytext[0]);
+}
+
+<STRING><<EOF>> {
+    cool_yylval.error_msg = "not find a quotation_end of string until eof";
+    return (ERROR);
+}
 
  /*
   *  The multiple-character operators. 各种运算符的定义和匹配
   */
-
 
 {DARROW} {
     return (DARROW);
@@ -178,7 +218,6 @@ COMMENT_LINE    --.*
 "\n" {
     curr_lineno += 1;
 }
-
 {INT_CONST} {
     cool_yylval.symbol = inttable.add_string(yytext, yyleng);
     return (INT_CONST);
@@ -191,7 +230,6 @@ COMMENT_LINE    --.*
     cool_yylval.boolean = 0;
     return (BOOL_CONST);
 }
-
 {TYPEID} {
     cool_yylval.symbol = idtable.add_string(yytext, yyleng);
     return (TYPEID);
