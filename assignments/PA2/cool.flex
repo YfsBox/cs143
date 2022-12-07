@@ -37,7 +37,9 @@ extern YYSTYPE cool_yylval;  // 用来表示当前的YYSTYPE
  *  Add Your own definitions here
  */
 %}
+
 %option noyywrap
+%x COMMENT
 /*
  * Define names for regular expressions here.
  */
@@ -74,35 +76,34 @@ TRUE_CONST      [t][rR][uU][eE]
 FALSE_CONST     [f][aA][lL][sS][eE]
 TYPEID          {capital}({letter}|{digit}|_)*
 OBJECTID        {lowcase}({letter}|{digit}|_)*
-/* comments */
-lcomment    "(*"
-rcomment    "*)"
+/* comments,参考flex手册即可写个大概 */
+COMMENT_BEGIN    "(*"
+COMMENT_END    "*)"
 commentele  .|"\n"
 COMMENT_LINE    --.*
-%x COMMENT
 
 %%
-// comment and nested comment
-"(*"{
-    BEGIN COMMENT;
-};
-<COMMENT>"*)" {
-    BEGIN INITIAL;
-};
+{COMMENT_BEGIN} {
+    BEGIN(COMMENT);
+}
+<COMMENT>{COMMENT_END} {
+    BEGIN(INITIAL);
+}
+{COMMENT_END} {
+    cool_yylval.error_msg = "find a commend_end error!";
+    return (ERROR);
+}
 <COMMENT>[^*\n]*        /* eat anything that's not a '*' */
 <COMMENT>"*"+[^*/\n]*   /* eat up '*'s not followed by '/'s */
-<COMMENT>\n  {
-    curr_lineno++;
-};
-
-{COMMENT_LINE} {
-
+<COMMENT>"\n" {
+    ++curr_lineno;
 }
-
 
  /*
   *  The multiple-character operators. 各种运算符的定义和匹配
   */
+
+
 {DARROW} {
     return (DARROW);
 }
@@ -202,5 +203,4 @@ COMMENT_LINE    --.*
 <<EOF>> {
     return 0;
 }
-
 %%
