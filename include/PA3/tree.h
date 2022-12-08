@@ -49,6 +49,7 @@
 //
 //
 ////////////////////////////////////////////////////////////////////////////
+// 树节点的定义
 class tree_node {
 protected:
     int line_number;            // stash the line number when node is made
@@ -111,7 +112,6 @@ public:
 //     list_node<Elem>::append(l1,l2);
 //
 //////////////////////////////////////////////////////////////////////////////
-
 template <class Elem> class list_node : public tree_node {
 public:
     tree_node *copy()            { return copy_list(); }
@@ -173,7 +173,6 @@ public:
     void dump(ostream& stream, int n);
 };
 
-
 template <class Elem> single_list_node<Elem> *list(Elem x);
 template <class Elem> append_node<Elem> *cons(Elem x, list_node<Elem> *l);
 template <class Elem> append_node<Elem> *xcons(list_node<Elem> *l, Elem x);
@@ -220,7 +219,6 @@ template <class Elem> Elem append_node<Elem>::nth(int n)
 	exit(1);
     }
 }
-
 ///////////////////////////////////////////////////////////////////////////
 //
 // nil_node::copy_list

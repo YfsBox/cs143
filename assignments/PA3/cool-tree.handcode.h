@@ -48,7 +48,6 @@ typedef Cases_class *Cases;
 virtual void dump_with_types(ostream&, int) = 0; 
 
 
-
 #define program_EXTRAS                          \
 void dump_with_types(ostream&, int);            
 
@@ -104,3 +103,6 @@ void dump_with_types(ostream&,int);
 
 
 #endif
+
+// 这一部分以typedef为主，typedef可以作为之前的node填入模版后的具体实现
+// 包含

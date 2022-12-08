@@ -102,7 +102,7 @@ typedef union YYSTYPE
 {
 
 /* Line 1685 of yacc.c  */
-#line 89 "cool.y"
+#line 89 "cool.y.cc.cc"
 
       Boolean boolean;
       Symbol symbol;

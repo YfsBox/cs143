@@ -71,22 +71,18 @@
     }
     
     */
-    
-    
-    
     void yyerror(char *s);        /*  defined below; called for each parse error */
     extern int yylex();           /*  the entry point to the lexer  */
-    
     /************************************************************************/
     /*                DONT CHANGE ANYTHING IN THIS SECTION                  */
-    
+    /* ast_root对应这个程序全局的ast，parse_results将会用在后续阶段 */
     Program ast_root;	      /* the result of the parse  */
     Classes parse_results;        /* for use in semantic analysis */
     int omerrs = 0;               /* number of errors in lexing and parsing */
     %}
     
     /* A union of all the types that can be the result of parsing actions. */
-    %union {
+    %union { /* 每一个union都对应的一个语义类型，都有相应的C++代码定义 */
       Boolean boolean;
       Symbol symbol;
       Program program;
@@ -102,7 +98,6 @@
       Expressions expressions;
       char *error_msg;
     }
-    
     /* 
     Declare the terminals; a few have types for associated lexemes.
     The token ERROR is never used in the parser; thus, it is a parse
@@ -121,7 +116,6 @@
     %token <boolean> BOOL_CONST 277
     %token <symbol>  TYPEID 278 OBJECTID 279 
     %token ASSIGN 280 NOT 281 LE 282 ERROR 283
-    
     /*  DON'T CHANGE ANYTHING ABOVE THIS LINE, OR YOUR PARSER WONT WORK       */
     /**************************************************************************/
     
@@ -136,6 +130,12 @@
     
     /* You will want to change the following line. */
     %type <features> dummy_feature_list
+    %type <feature>  dummy_feature
+    %type <formals>   dummy_formal_list
+    %type <formal>    dummy_formal
+    %type <expression> expr
+    %type <expressions> exprs
+
     
     /* Precedence declarations go here. */
     
@@ -148,25 +148,66 @@
     ;
     
     class_list
-    : class			/* single class */
-    { $$ = single_Classes($1);
-    parse_results = $$; }
-    | class_list class	/* several classes */
-    { $$ = append_Classes($1,single_Classes($2)); 
-    parse_results = $$; }
+    : class {
+        $$ = single_Classes($1);
+        parse_results = $$;
+    }
+    | class_list class {
+        $$ = append_Classes($1,single_Classes($2));
+        parse_results = $$;
+    }
     ;
     
     /* If no parent is specified, the class inherits from the Object class. */
-    class	: CLASS TYPEID '{' dummy_feature_list '}' ';'
-    { $$ = class_($2,idtable.add_string("Object"),$4,
-    stringtable.add_string(curr_filename)); }
-    | CLASS TYPEID INHERITS TYPEID '{' dummy_feature_list '}' ';'
-    { $$ = class_($2,$4,$6,stringtable.add_string(curr_filename)); }
+    class: CLASS TYPEID '{' dummy_feature_list '}' ';' {
+        $$ = class_($2,idtable.add_string("Object"),$4,stringtable.add_string(curr_filename));
+    }
+    | CLASS TYPEID INHERITS TYPEID '{' dummy_feature_list '}' ';' {
+        $$ = class_($2,$4,$6,stringtable.add_string(curr_filename));
+    }
     ;
     
     /* Feature list may be empty, but no empty features in list. */
-    dummy_feature_list:		/* empty */
-    {  $$ = nil_Features(); }
+    dummy_feature_list: {
+        $$ = nil_Features();
+    }
+    | dummy_feature {
+        $$ = single_Features($1);
+    }
+    | dummy_feature_list dummy_feature {
+        $$ = append_Features($1, single_Features($2));
+    }
+    ;
+    /* dummy_feature */
+    dummy_feature: OBJECTID ':' TYPEID ';' {
+
+    }
+    | OBJECTID ':' TYPEID '<' '-' expr ';' {
+
+    }
+    | OBJECTID '(' ')' ':' TYPEID ';' {
+
+    }
+    | OBJECTID '(' dummy_formal dummy_formal_list ')' ':' TYPEID ';' {
+
+    }
+    ;
+
+    dummy_formal_list: {
+        $$ = nil_Formals();
+    }
+    | dummy_formal {
+        $$ = single_Formals($1);
+    }
+    | dummy_formal_list dummy_formal {
+        $$ = append_Formals($1, single_Formals($2));
+    }
+    ;
+
+    dummy_formal: ',' OBJECTID ':' TYPEID {
+
+    }
+    ;
     
     
     /* end of grammar */

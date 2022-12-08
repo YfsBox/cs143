@@ -143,7 +143,7 @@ typedef Cases_class *Cases;
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE // 定义了一个联合体
-#line 46 "cool.y"
+#line 46 "cool.y.cc.cc"
 {
   Boolean boolean;
   Symbol symbol;
