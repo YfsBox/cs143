@@ -109,6 +109,17 @@
     problems (bison 1.25 and earlier start at 258, later versions -- at
     257)
     */
+    %right ASSIGN
+    %left NOT
+    %nonassoc LE '<' '='
+    %left '+' '-'
+    %left '*' '/'
+    %left ISVOID
+    %left '~'
+    %left '@'
+    %left '.'
+
+
     %token CLASS 258 ELSE 259 FI 260 IF 261 IN 262 
     %token INHERITS 263 LET 264 LOOP 265 POOL 266 THEN 267 WHILE 268
     %token CASE 269 ESAC 270 OF 271 DARROW 272 NEW 273 ISVOID 274
@@ -180,16 +191,16 @@
     ;
     /* dummy_feature */
     dummy_feature: OBJECTID ':' TYPEID ';' {
-
+        $$ = attr($1, $3, no_expr());
     }
-    | OBJECTID ':' TYPEID '<' '-' expr ';' {
-
+    | OBJECTID ':' TYPEID ASSIGN expr ';' {
+        $$ = attr($1, $3, $6);
     }
-    | OBJECTID '(' ')' ':' TYPEID ';' {
-
+    | OBJECTID '(' ')' ':' TYPEID '{' expr '}' ';' {
+        $$ = method($1, nil_Formals(), $5, $7);
     }
-    | OBJECTID '(' dummy_formal dummy_formal_list ')' ':' TYPEID ';' {
-
+    | OBJECTID '(' dummy_formal dummy_formal_list ')' ':' TYPEID '{' expr '}' ';' {
+        $$ = method($1, append_Formals($4, single_Formals($3)), $7, $9);
     }
     ;
 
@@ -205,9 +216,72 @@
     ;
 
     dummy_formal: ',' OBJECTID ':' TYPEID {
-
+        $$ = formal($2, $4);
     }
     ;
+
+    expr: OBJECTID ASSIGN expr {
+        $$ = assign($1, $3);
+    }
+    | IF expr THEN expr ELSE expr FI {
+        $$ = cond($2, $4, $6);
+    }
+    | WHILE expr LOOP expr POOL {
+        $$ = loop($2, $4);
+    }
+    | NEW TYPEID {
+        $$ = new_($2);
+    }
+    | ISVOID expr {
+        $$ = isvoid($2);
+    }
+    | expr '+' expr {
+        $$ = plus($1, $3);
+    }
+    | expr '-' expr {
+        $$ = sub($1, $3);
+    }
+    | expr '*' expr {
+        $$ = mul($1, $3);
+    }
+    | expr '/' expr {
+        $$ = divide($1, $3);
+    }
+    | '~' expr {
+        $$ = neg($2);
+    }
+    | expr '<' expr {
+        $$ = lt($1, $3);
+    }
+    | expr LE expr {
+        $$ = leq($1, $3);
+    }
+    | expr '=' expr {
+        $$ = eq($1, $3);
+    }
+    | NOT expr {
+        $$ = comp($2);
+    }
+    | '(' expr ')' {
+        $$ = $2;
+    }
+    | OBJECTID {
+        $$ = object($1);
+    }
+    | INT_CONST {
+        $$ = int_const($1);
+    }
+    | STR_CONST {
+        $$ = string_const($1);
+    }
+    | TRUE {
+        $$ = bool_const($1);
+    }
+    | FALSE {
+        $$ = bool_const($1);
+    }
+    ;
+
     
     
     /* end of grammar */
