@@ -109,16 +109,6 @@
     problems (bison 1.25 and earlier start at 258, later versions -- at
     257)
     */
-    %right ASSIGN
-    %left NOT
-    %nonassoc LE '<' '='
-    %left '+' '-'
-    %left '*' '/'
-    %left ISVOID
-    %left '~'
-    %left '@'
-    %left '.'
-
 
     %token CLASS 258 ELSE 259 FI 260 IF 261 IN 262 
     %token INHERITS 263 LET 264 LOOP 265 POOL 266 THEN 267 WHILE 268
@@ -149,6 +139,16 @@
     %type <expressions> block
 
     /* Precedence declarations go here. */
+
+    %right ASSIGN
+    %left NOT
+    %nonassoc LE '<' '='
+    %left '+' '-'
+    %left '*' '/'
+    %left ISVOID
+    %left '~'
+    %left '@'
+    %left '.'
 
     %%
     /* 
@@ -198,15 +198,12 @@
     | OBJECTID '(' ')' ':' TYPEID '{' expr '}' ';' {
         $$ = method($1, nil_Formals(), $5, $7);
     }
-    | OBJECTID '(' dummy_formal dummy_formal_list ')' ':' TYPEID '{' expr '}' ';' {
-        $$ = method($1, append_Formals($4, single_Formals($3)), $7, $9);
+    | OBJECTID '(' dummy_formal_list ')' ':' TYPEID '{' expr '}' ';' {
+        $$ = method($1, $3, $6, $8);
     }
     ;
     /* formal_list */
-    dummy_formal_list: {
-        $$ = nil_Formals();
-    }
-    | dummy_formal {
+    dummy_formal_list: dummy_formal {
         $$ = single_Formals($1);
     }
     | dummy_formal_list ',' dummy_formal {
@@ -265,8 +262,8 @@
     | WHILE expr LOOP expr POOL {
         $$ = loop($2, $4);
     }
-    | block {
-        $$ = block($1);
+    | '{' block '}' {
+        $$ = block($2);
     }
     | LET OBJECTID ':' TYPEID IN expr {
         $$ = let($2, $4, no_expr(), $6);
