@@ -146,11 +146,10 @@
     %type <formal>    dummy_formal
     %type <expression> expr
     %type <expressions> exprs
+    %type <expressions> block
 
-    
     /* Precedence declarations go here. */
-    
-    
+
     %%
     /* 
     Save the root of the abstract syntax tree in a global variable.
@@ -194,7 +193,7 @@
         $$ = attr($1, $3, no_expr());
     }
     | OBJECTID ':' TYPEID ASSIGN expr ';' {
-        $$ = attr($1, $3, $6);
+        $$ = attr($1, $3, $5);
     }
     | OBJECTID '(' ')' ':' TYPEID '{' expr '}' ';' {
         $$ = method($1, nil_Formals(), $5, $7);
@@ -203,31 +202,77 @@
         $$ = method($1, append_Formals($4, single_Formals($3)), $7, $9);
     }
     ;
-
+    /* formal_list */
     dummy_formal_list: {
         $$ = nil_Formals();
     }
     | dummy_formal {
         $$ = single_Formals($1);
     }
-    | dummy_formal_list dummy_formal {
-        $$ = append_Formals($1, single_Formals($2));
+    | dummy_formal_list ',' dummy_formal {
+        $$ = append_Formals($1, single_Formals($3));
+    }
+    ;
+    /* formal */
+    dummy_formal: OBJECTID ':' TYPEID {
+        $$ = formal($1, $3);
+    }
+    ;
+    /* expressions */
+    exprs: {
+        $$ = nil_Expressions();
+    }
+    | expr {
+        $$ = single_Expressions($1);
+    }
+    | exprs ',' expr {
+        $$ = append_Expressions($1, single_Expressions($3));
+    }
+    ;
+    block: expr ';' {
+        $$ = single_Expressions($1);
+    }
+    | block expr ';' {
+        $$ = append_Expressions($1, single_Expressions($2));
     }
     ;
 
-    dummy_formal: ',' OBJECTID ':' TYPEID {
-        $$ = formal($2, $4);
-    }
-    ;
-
+    /* expr */
     expr: OBJECTID ASSIGN expr {
         $$ = assign($1, $3);
+    }
+    | expr '.' OBJECTID '(' ')' {
+        $$ = dispatch($1, $3, nil_Expressions());
+    }
+    | expr '.' OBJECTID '(' exprs ')' {
+        $$ = dispatch($1, $3, $5);
+    }
+    | expr '@' TYPEID '.' OBJECTID '(' ')' {
+        $$ = static_dispatch($1, $3, $5, nil_Expressions());
+    }
+    | expr '@' TYPEID '.' OBJECTID '(' exprs ')' {
+        $$ = static_dispatch($1, $3, $5, $7);
+    }
+    | OBJECTID '(' ')' {
+
+    }
+    | OBJECTID '(' exprs ')' {
+
     }
     | IF expr THEN expr ELSE expr FI {
         $$ = cond($2, $4, $6);
     }
     | WHILE expr LOOP expr POOL {
         $$ = loop($2, $4);
+    }
+    | block {
+        $$ = block($1);
+    }
+    | LET OBJECTID ':' TYPEID IN expr {
+        $$ = let($2, $4, no_expr(), $6);
+    }
+    | LET OBJECTID ':' TYPEID ASSIGN expr IN expr {
+        $$ = let($2, $4, $6, $8);
     }
     | NEW TYPEID {
         $$ = new_($2);
@@ -274,10 +319,7 @@
     | STR_CONST {
         $$ = string_const($1);
     }
-    | TRUE {
-        $$ = bool_const($1);
-    }
-    | FALSE {
+    | BOOL_CONST {
         $$ = bool_const($1);
     }
     ;

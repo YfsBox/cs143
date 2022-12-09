@@ -46,7 +46,7 @@ parser: ${OBJS}
 .cc.o:
 	${CC} ${CFLAGS} -c $<
 
-cool-parse.cc cool-parse.h: cool.y.cc
+cool-parse.cc cool-parse.h: cool.y
 	bison ${BFLAGS} cool.y
 	mv -f cool.tab.c cool-parse.cc
 
