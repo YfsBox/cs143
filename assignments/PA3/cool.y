@@ -169,6 +169,10 @@
         $$ = append_Classes($1,single_Classes($2));
         parse_results = $$;
     }
+    | error ';' class_list {
+        $$ = $3;
+        parse_results = $$;
+    }
     ;
 
     /* If no parent is specified, the class inherits from the Object class. */
@@ -189,6 +193,9 @@
     }
     | dummy_feature_list dummy_feature {
         $$ = append_Features($1, single_Features($2));
+    }
+    | error ';' dummy_feature_list {
+        $$ = $3;
     }
     ;
     /* dummy_feature */
@@ -228,12 +235,18 @@
     | exprs ',' expr {
         $$ = append_Expressions($1, single_Expressions($3));
     }
+    | error ',' exprs {
+        $$ = $3;
+    }
     ;
     block: expr ';' {
         $$ = single_Expressions($1);
     }
     | block expr ';' {
         $$ = append_Expressions($1, single_Expressions($2));
+    }
+    | block error ';' {
+        $$ = $1;
     }
     ;
 
@@ -249,6 +262,9 @@
     | OBJECTID ':' TYPEID ASSIGN expr ',' let_expr {
         $$ = let($1, $3, $5, $7);
     }
+    | error ',' let_expr {
+        $$ = $3;
+    }
     ;
 
     case_expr_list: case_expr {
@@ -259,8 +275,8 @@
     }
     ;
 
-    case_expr: OBJECTID ':' TYPEID '=' '>' expr ';' {
-        $$ = branch($1, $3, $6);
+    case_expr: OBJECTID ':' TYPEID DARROW expr ';' {
+        $$ = branch($1, $3, $5);
     }
     ;
 

@@ -7,6 +7,10 @@ for file in files:
     if os.path.splitext(file)[1] == '.test':
         test_files.append('./grading/{}'.format(file))
 
+test_files = [
+    'grading/atoi.test'
+]
+
 err_count = 0
 for file in test_files:
     flag = False
