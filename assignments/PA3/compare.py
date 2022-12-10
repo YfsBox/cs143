@@ -11,8 +11,8 @@ err_count = 0
 for file in test_files:
     flag = False
     print('start test file: {}'.format(file))
-    myOutput = os.popen("../../bin/.i686/lexer {} | ./parser".format(file)).read()
-    stdOutput = os.popen("../../bin/.i686/lexer {} | ../../bin/.i686/parser".format(file)).read()
+    myOutput = os.popen("../../bin/lexer {} | ./parser".format(file)).read()
+    stdOutput = os.popen("../../bin/lexer {} | ../../bin/parser".format(file)).read()
     while True:
         try:
             myEnd = myOutput.index("\n")

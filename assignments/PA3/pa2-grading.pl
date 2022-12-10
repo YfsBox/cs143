@@ -27,27 +27,27 @@ sub usage {
 
 die usage()
     unless(GetOptions("dir=s" => \$grading_dir,
-		      "cmd=s" => \$grading_cmd,
-		      "x" => \$just_unpack,
-		      "r" => \$just_run,
-		      "v" => \$verbose,
-		      "skip" => \$skip_check,
-		      "check=s" => \@check_files,
-		      "help" => sub { usage(); exit 0; }));
+        "cmd=s" => \$grading_cmd,
+        "x" => \$just_unpack,
+        "r" => \$just_run,
+        "v" => \$verbose,
+        "skip" => \$skip_check,
+        "check=s" => \@check_files,
+        "help" => sub { usage(); exit 0; }));
 
 unless($skip_check) {
     print "Checking that you appear to be in the assignment directory...\n"
-	if($verbose);
+        if($verbose);
     my(@found) = grep({ -r $_ } @check_files);
     unless(@found) {
-	die "$0: could not find any of the following files - are you running\n  this from the assignment directory?\n    " . join("\n    ", @check_files) . "\n";
+        die "$0: could not find any of the following files - are you running\n  this from the assignment directory?\n    " . join("\n    ", @check_files) . "\n";
     }
 }
 
 print "Creating grading directory '$grading_dir' if necessary...\n"
     if($verbose);
 unless((-d $grading_dir) or
-       mkdir($grading_dir)) {
+    mkdir($grading_dir)) {
     die "$0: '$grading_dir' doesn't appear to be a directory and can't be created: $!";
 }
 
@@ -59,29 +59,29 @@ unless(chdir($grading_dir)) {
 
 unless($just_run) {
     print "Unpacking grading script and test cases...\n"
-	if($verbose);
+        if($verbose);
 
     my $tar_options = $verbose ? "-zxvf" : "-zxf";
     my $fh = new FileHandle("| tar $tar_options -") ||
-	die "$0: couldn't run uudecode or tar: $!\n";
+        die "$0: couldn't run uudecode or tar: $!\n";
 
     # skip the first line
     my $dummy = <DATA>;
     die unless($dummy =~ /^begin /);
     binmode($fh);
     while(defined(my $line = <DATA>)) {
-	$line =~ s/\s+$//;
-	last if($line =~ /^end$/);
-	my $unpacked = unpack('u', $line);	
-	next unless(defined($unpacked));
-	print $fh $unpacked;
+        $line =~ s/\s+$//;
+        last if($line =~ /^end$/);
+        my $unpacked = unpack('u', $line);
+        next unless(defined($unpacked));
+        print $fh $unpacked;
     }
     $fh->close;
 }
 
 unless($just_unpack) {
     print "Running command: $grading_cmd\n"
-	if($verbose);
+        if($verbose);
 
     system($grading_cmd);
 }
