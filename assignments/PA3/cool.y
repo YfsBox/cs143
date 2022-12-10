@@ -298,10 +298,10 @@
         $$ = static_dispatch($1, $3, $5, $7);
     }
     | OBJECTID '(' ')' {
-        $$ = dispatch(no_expr(), $1, nil_Expressions());
+        $$ = dispatch(object(idtable.add_string("self")), $1, nil_Expressions());
     }
     | OBJECTID '(' exprs ')' {
-       $$ = dispatch(no_expr(), $1, $3);
+       $$ = dispatch(object(idtable.add_string("self")), $1, $3);
     }
     | IF expr THEN expr ELSE expr FI {
         $$ = cond($2, $4, $6);
