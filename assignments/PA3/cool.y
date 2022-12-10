@@ -137,6 +137,10 @@
     %type <expression> expr
     %type <expressions> exprs
     %type <expressions> block
+    %type <features> let_feature_list
+    %type <feature> let_feature
+    %type <cases> case_expr_list
+    %type <case_> case_expr
 
     /* Precedence declarations go here. */
 
@@ -234,6 +238,36 @@
     }
     ;
 
+    let_feature_list: let_feature {
+        $$ = single_Features($1);
+    }
+    | let_feature_list ',' let_feature {
+        $$ = append_Features($1, single_Features($3));
+    }
+    ;
+
+    let_feature: OBJECTID ':' TYPEID {
+        $$ = attr($1, $3, no_expr());
+    }
+    | OBJECTID ':' TYPEID ASSIGN expr {
+        $$ = attr($1, $3, $5);
+    }
+    ;
+
+    case_expr_list: case_expr {
+        $$ = single_Cases($1);
+    }
+    | case_expr_list case_expr {
+        $$ = append_Cases($1, single_Cases($2));
+    }
+    ;
+
+    case_expr: OBJECTID ':' TYPEID '=' '>' expr ';' {
+        $$ = branch($1, $3, $6);
+    }
+    ;
+
+
     /* expr */
     expr: OBJECTID ASSIGN expr {
         $$ = assign($1, $3);
@@ -251,10 +285,10 @@
         $$ = static_dispatch($1, $3, $5, $7);
     }
     | OBJECTID '(' ')' {
-
+        $$ = dispatch(no_expr(), $1, nil_Expressions());
     }
     | OBJECTID '(' exprs ')' {
-
+       $$ = dispatch(no_expr(), $1, $3);
     }
     | IF expr THEN expr ELSE expr FI {
         $$ = cond($2, $4, $6);
@@ -265,11 +299,11 @@
     | '{' block '}' {
         $$ = block($2);
     }
-    | LET OBJECTID ':' TYPEID IN expr {
-        $$ = let($2, $4, no_expr(), $6);
+    | LET let_feature_list IN expr {
+
     }
-    | LET OBJECTID ':' TYPEID ASSIGN expr IN expr {
-        $$ = let($2, $4, $6, $8);
+    | CASE expr OF case_expr_list ESAC {
+        $$ = typcase($2, $4);
     }
     | NEW TYPEID {
         $$ = new_($2);
