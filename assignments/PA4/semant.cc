@@ -144,6 +144,11 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) 
         }
         InitInClass(curr_elem);
     }
+    auto findmain = class_name_map_.find(Main); // 没有main函数
+    if (findmain == class_name_map_.end()) {
+        semant_error() << "not have main object\n";
+    }
+
     /* 检查是否有未定义的继承，并且构造继承图 */
     for (int i = classes->first(); classes->more(i) == TRUE; i = classes->next(i)) {
         curr_elem = dynamic_cast<class__class*>(classes->nth(i));
@@ -164,7 +169,7 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) 
 }
 
 bool ClassTable::NameTypeValid(Symbol name) {
-    return name != Object && name != IO && name != Int && name != Bool && name != Str && name != SELF_TYPE;
+    return name != IO && name != Int && name != Bool && name != Str && name != SELF_TYPE;
 }
 
 void ClassTable::install_basic_classes() {
