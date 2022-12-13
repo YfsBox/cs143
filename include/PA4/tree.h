@@ -13,8 +13,6 @@
 // This file defines the basic class of tree node and list
 //
 ///////////////////////////////////////////////////////////////////////////
- 
-
 #include "stringtab.h"
 #include "cool-io.h"
 
@@ -172,7 +170,6 @@ public:
     Elem nth_length(int n, int &len);
     void dump(ostream& stream, int n);
 };
-
 
 template <class Elem> single_list_node<Elem> *list(Elem x);
 template <class Elem> append_node<Elem> *cons(Elem x, list_node<Elem> *l);

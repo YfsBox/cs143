@@ -110,12 +110,12 @@ void dump_Boolean(ostream& stream, int padding, Boolean b);
 //  every distinct subclass of Expression.
 //
 
-void Expression_class::dump_type(ostream& stream, int n)
-{
-  if (type)
-    { stream << pad(n) << ": " << type << endl; }
-  else
-    { stream << pad(n) << ": _no_type" << endl; }
+void Expression_class::dump_type(ostream& stream, int n) {
+  if (type) {
+      stream << pad(n) << ": " << type << endl;
+  } else {
+      stream << pad(n) << ": _no_type" << endl;
+  }
 }
 
 void dump_line(ostream& stream, int n, tree_node *t)

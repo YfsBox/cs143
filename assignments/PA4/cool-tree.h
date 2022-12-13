@@ -127,7 +127,7 @@ typedef Cases_class *Cases;
 // define constructor - program
 class program_class : public Program_class {
 protected:
-   Classes classes;
+   Classes classes;  // 一个class的list,包含了程序中的所有class
 public:
    program_class(Classes a1) {
       classes = a1;
@@ -142,7 +142,6 @@ public:
    program_EXTRAS
 #endif
 };
-
 
 // define constructor - class_
 class class__class : public Class__class {
@@ -160,6 +159,12 @@ public:
    }
    Class_ copy_Class_();
    void dump(ostream& stream, int n);
+   Symbol get_name() const {
+       return name;
+   }
+   Symbol get_parent() const {
+       return parent;
+   }
 
 #ifdef Class__SHARED_EXTRAS
    Class__SHARED_EXTRAS

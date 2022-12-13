@@ -2,7 +2,9 @@
 #define SEMANT_H_
 
 #include <assert.h>
-#include <iostream>  
+#include <iostream>
+#include <map>
+#include <list>
 #include "cool-tree.h"
 #include "stringtab.h"
 #include "symtab.h"
@@ -19,11 +21,22 @@ typedef ClassTable *ClassTableP;
 // you like: it is only here to provide a container for the supplied
 // methods.
 
+// 看来还需要为所添加的类建立一个数据结构，用来判断继承图中的环，以及未定义类的问题。
+
 class ClassTable {
 private:
   int semant_errors;
   void install_basic_classes();
   ostream& error_stream;
+  std::map<Symbol, std::list<Symbol> > class_graph_;
+  std::map<Symbol, Class_> class_name_map_;
+
+  bool check_loop();
+  void InitInClass(class__class *cls) {
+      class_graph_[cls->get_name()] = {};
+      class_name_map_[cls->get_name()] = cls;
+  }
+  bool NameTypeValid(Symbol name);
 
 public:
   ClassTable(Classes);
