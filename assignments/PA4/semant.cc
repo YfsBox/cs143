@@ -140,6 +140,50 @@ std::vector<Class_> ClassTable::get_class_chain(Class_ cls) {
     return chain;
 }
 
+bool ClassTable::check_method_name(Symbol cls, method_class *feature) {
+    auto findit = methods_table_.find(cls);
+    for (auto method : findit->second) {
+        if (method->get_name() == feature->get_name()) {  // 出现重定义的name
+            return false;
+        }
+    }
+    return true;
+}
+
+void ClassTable::install_methods() {
+    class__class *curr_class;
+    Features curr_features;
+    for (auto cls_pair : class_name_map_) {
+        curr_class = dynamic_cast<class__class*> (cls_pair.second);
+        curr_features = curr_class->get_features();
+        Feature curr_feature;
+        methods_table_[curr_class->get_name()] = {};
+        for (int i = curr_features->first(); curr_features->more(i) == TRUE; i = curr_features->next(i)) {
+            curr_feature = curr_features->nth(i);
+            // 首先检查名称合法性
+            if (curr_feature->is_attr()) { // 属于method类型
+                continue;   // 属于attr类型,暂且continue
+            }
+            method_class *curr_method = dynamic_cast<method_class*> (curr_feature);
+            if (!check_method_name(curr_class->get_name(), curr_method)) { // 该method重复name应该忽略
+                semant_error(curr_class) << curr_class->get_name() << " the method " <<curr_method->get_name()
+                        << " redifinetion.\n";
+                continue;
+            }
+            methods_table_[curr_class->get_name()].push_back(curr_method); // 加入到method_table中
+        }
+    }
+    /*
+    for (auto methods_pair : methods_table_) {
+        semant_error() << methods_pair.first << ":\n";
+        for (auto method : methods_pair.second) {
+            semant_error() << method->get_name() << " ";
+        }
+        semant_error() << "\n";
+    }*/
+}
+
+
 ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) {
     /* Fill this in */
     install_basic_classes();
@@ -184,6 +228,7 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) 
     if (have_loop) {
         semant_error() << "ring appears in an inheritance relationship\n";
     }
+    install_methods();
 }
 
 bool ClassTable::NameTypeValid(Symbol name) {

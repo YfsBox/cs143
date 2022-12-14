@@ -31,7 +31,7 @@ private:
   ostream& error_stream;
   std::map<Symbol, std::list<Symbol>> class_graph_;
   std::map<Symbol, Class_> class_name_map_;
-  std::map<Symbol, std::list<method_class>> methods_table_;
+  std::map<Symbol, std::list<method_class*>> methods_table_;
 
   bool check_loop();
   void InitInClass(class__class *cls) {
@@ -39,7 +39,9 @@ private:
       class_name_map_[cls->get_name()] = cls;
   }
   bool NameTypeValid(Symbol name);
+  bool check_method_name(Symbol cls, method_class *feature);
   void install_information();
+  void install_methods();
   std::vector<Class_> get_class_chain(Class_ cls);
 
 public:

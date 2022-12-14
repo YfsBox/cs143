@@ -67,7 +67,8 @@ Symbol get_parent() const { return parent; }          \
 Features get_features() const { return features; }
 
 #define Feature_EXTRAS                                        \
-virtual void dump_with_types(ostream&,int) = 0; 
+virtual void dump_with_types(ostream&,int) = 0;               \
+virtual bool is_attr() = 0;
 
 
 #define Feature_SHARED_EXTRAS                                       \
@@ -102,6 +103,14 @@ void dump_type(ostream&, int);               \
 Expression_class() { type = (Symbol) NULL; }
 
 #define Expression_SHARED_EXTRAS           \
-void dump_with_types(ostream&,int); 
+void dump_with_types(ostream&,int);
+
+#define method_EXTRAS \
+bool is_attr()  { return false; }   \
+Symbol get_name() { return name; }  \
+Formals get_formals() { return formals; }
+
+#define attr_EXTRAS \
+bool is_attr() { return true; }
 
 #endif
