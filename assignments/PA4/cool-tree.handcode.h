@@ -112,6 +112,7 @@ Formals get_formals() { return formals; }
 
 #define attr_EXTRAS \
 bool is_attr() { return true; } \
-Symbol get_name() { return name;}
-
+Symbol get_name() { return name;} \
+Symbol get_type() { return type_decl; } \
+Expression get_expr() { return init; }
 #endif

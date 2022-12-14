@@ -125,7 +125,7 @@ public:
    // Lookup an item through all scopes of the symbol table.  If found
    // it returns the associated information field, if not it returns
    // NULL.
-
+   // 返回一个
    DAT * lookup(SYM s)
    {
        for(ScopeList *i = tbl; i != NULL; i=i->tl()) {
@@ -137,7 +137,7 @@ public:
        }
        return NULL;
    }
-
+   // 从顶层开始检查,检查到就返回，否则就返回NULL，也就是从当前作用域开始检查
    // probe the symbol table.  Check the top scope (only) for the item
    // 's'.  If found, return the information field.  If not return NULL.
    DAT *probe(SYM s)

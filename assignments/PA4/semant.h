@@ -44,7 +44,7 @@ private:
   bool check_attr_name(Symbol cls, attr_class *feature);
   void install_information();
   void install_methods_and_attrs();
-  std::vector<Class_> get_class_chain(Class_ cls);
+  std::list<Class_> get_class_chain(Class_ cls);
 
 public:
   ClassTable(Classes);

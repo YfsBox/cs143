@@ -120,14 +120,13 @@ bool ClassTable::check_loop() {
     return cnt != class_name_map_.size(); // 如果是true就是有环的
 }
 
-std::vector<Class_> ClassTable::get_class_chain(Class_ cls) {
-    std::vector<Class_> chain;
-    chain.reserve(8);
+std::list<Class_> ClassTable::get_class_chain(Class_ cls) {
+    std::list<Class_> chain;
     Symbol curr_symbol;
     Symbol parent_symbol;
     Class_ curr_class = cls;
     while (true) {
-        chain.push_back(curr_class);
+        chain.push_front(curr_class);  // 从开头加入
         class__class *curr_class_class = dynamic_cast<class__class*> (curr_class);
         curr_symbol = curr_class_class->get_name();
         if (!NameTypeValid(curr_symbol) || curr_symbol == Object) { // 检查是否到达继承的终点
@@ -356,25 +355,44 @@ void ClassTable::install_basic_classes() {
 }
 
 void ClassTable::install_information() {
-    Symbol curr_symbol;
+    Symbol curr_class_name;
     class__class *curr_class;
     Features curr_features;
     for (auto sc : class_name_map_) {
-        curr_symbol = sc.first;
+        curr_class_name = sc.first;
         curr_class = dynamic_cast<class__class*> (sc.second);
         curr_features = curr_class->get_features();
 
         auto chain = get_class_chain(sc.second); // 获取继承链
         // 根据继承链,来将所有的attr加入到object_env中,其中需要注意作用域
+        Symbol chain_symbol;
+        for (auto chain_node : chain) { // 从Object一直到该类自身,这一步仅仅是处理attr的声明,先加入符号表之中
+            class__class *chain_class = dynamic_cast<class__class*> (chain_node);
+            chain_symbol = chain_class->get_name();
+            const std::list<attr_class*>& chain_attrs = attrs_table_[chain_symbol];
+            objectEnv.enterscope();
+            for (auto attr : chain_attrs) {
+                objectEnv.addid(attr->get_name(), new Symbol(attr->get_type()));
+            }
+        }
+        // 正式地检查method和attr
+        const std::list<attr_class*>& curr_attrs = attrs_table_[curr_class_name];
+        const std::list<method_class*>& curr_methods = methods_table_[curr_class_name];
+        // 检查attrs的类型，主要在于检查init对应的表达式是否和已经在符号表中记录的一致
+        for (auto attr : curr_attrs) {
 
+        }
+        // 检查method的类型
+        for (auto method : curr_methods) {
 
-        // 正式地检查method和type
-
-
+        }
         // 离开作用域，弹出
+        auto chain_depth = chain.size();
+        for (uint i = 0; i < chain_depth; i++) {
+            objectEnv.exitscope();
+        }
     }
 }
-
 ////////////////////////////////////////////////////////////////////
 //
 // semant_error is an overloaded function for reporting errors
@@ -405,10 +423,7 @@ ostream& ClassTable::semant_error()
 {                                                 
     semant_errors++;                            
     return error_stream;
-} 
-
-
-
+}
 /*   This is the entry point to the semantic checker.
 
      Your checker should do the following two things:
@@ -437,7 +452,7 @@ void ClassTable::check_and_install() {
     for (auto cls_pair : class_name_map_) {
         class_symbol = cls_pair.first;
         curr_class = dynamic_cast<class__class*> (cls_pair.second);
-
+        auto curr_chain = get_class_chain(cls_pair.second);
 
 
 
