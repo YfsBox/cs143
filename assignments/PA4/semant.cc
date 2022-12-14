@@ -354,7 +354,7 @@ void ClassTable::install_basic_classes() {
     InitInClass(dynamic_cast<class__class*> (Str_class));
 }
 
-void ClassTable::install_information() {
+void ClassTable::check_and_install() {
     Symbol curr_class_name;
     class__class *curr_class;
     Features curr_features;
@@ -444,19 +444,104 @@ void ClassTable::show_chains() {
         auto chain = get_class_chain(cls.second);
     }
 }
+Symbol branch_class::check_type() {
+    return Object;
+}
 
-void ClassTable::check_and_install() {
-    // 首先根据继承链,将object载入
-    Symbol class_symbol;
-    class__class *curr_class;
-    for (auto cls_pair : class_name_map_) {
-        class_symbol = cls_pair.first;
-        curr_class = dynamic_cast<class__class*> (cls_pair.second);
-        auto curr_chain = get_class_chain(cls_pair.second);
+Symbol static_dispatch_class::check_type() {
+    return Object;
+}
 
+Symbol dispatch_class::check_type() {
+    return Object;
+}
 
+Symbol cond_class::check_type() {
+    return Object;
+}
 
-    }
+Symbol loop_class::check_type() {
+    return Object;
+}
+
+Symbol typcase_class::check_type() {
+    return Object;
+}
+
+Symbol block_class::check_type() {
+    return Object;
+}
+
+Symbol let_class::check_type() {
+    return Object;
+}
+
+Symbol plus_class::check_type() {
+    return Object;
+}
+
+Symbol sub_class::check_type() {
+    return Object;
+}
+
+Symbol mul_class::check_type() {
+    return Object;
+}
+
+Symbol divide_class::check_type() {
+    return Object;
+}
+
+Symbol neg_class::check_type() {
+    return Object;
+}
+
+Symbol lt_class::check_type() {
+    return Object;
+}
+
+Symbol eq_class::check_type() {
+    return Object;
+}
+
+Symbol leq_class::check_type() {
+    return Object;
+}
+
+Symbol comp_class::check_type() {
+    return Object;
+}
+
+Symbol int_const_class::check_type() {
+    return Object;
+}
+
+Symbol bool_const_class::check_type() {
+    return Object;
+}
+
+Symbol string_const_class::check_type() {
+    return Object;
+}
+
+Symbol new__class::check_type() {
+    return Object;
+}
+
+Symbol isvoid_class::check_type() {
+    return Object;
+}
+
+Symbol no_expr_class::check_type() {
+    return Object;
+}
+
+Symbol object_class::check_type() {
+    return Object;
+}
+
+Symbol assign_class::check_type() {
+    return Object;
 }
 
 void program_class::semant()
@@ -468,8 +553,8 @@ void program_class::semant()
     classtable->show_chains();
     classtable->check_and_install();
     if (classtable->errors()) {
-	cerr << "Compilation halted due to static semantic errors." << endl;
-	exit(1);
+	    cerr << "Compilation halted due to static semantic errors." << endl;
+	    exit(1);
     }
 }
 

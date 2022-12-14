@@ -87,11 +87,12 @@ void dump_with_types(ostream&,int);
 
 
 #define Case_EXTRAS                             \
-virtual void dump_with_types(ostream& ,int) = 0;
-
+virtual void dump_with_types(ostream& ,int) = 0;\
+virtual Symbol check_type() = 0;
 
 #define branch_EXTRAS                                   \
-void dump_with_types(ostream& ,int);
+void dump_with_types(ostream& ,int);            \
+Symbol check_type();
 
 
 #define Expression_EXTRAS                    \
@@ -100,7 +101,9 @@ Symbol get_type() { return type; }           \
 Expression set_type(Symbol s) { type = s; return this; } \
 virtual void dump_with_types(ostream&,int) = 0;  \
 void dump_type(ostream&, int);               \
-Expression_class() { type = (Symbol) NULL; }
+virtual Symbol check_type() = 0;                \
+Expression_class() { type = (Symbol) NULL; } \
+
 
 #define Expression_SHARED_EXTRAS           \
 void dump_with_types(ostream&,int);
@@ -115,4 +118,79 @@ bool is_attr() { return true; } \
 Symbol get_name() { return name;} \
 Symbol get_type() { return type_decl; } \
 Expression get_expr() { return init; }
+
+#define assign_EXTRAS \
+Symbol check_type();
+
+#define static_dispatch_EXTRAS \
+Symbol check_type();
+
+#define dispatch_EXTRAS \
+Symbol check_type();
+
+#define cond_EXTRAS \
+Symbol check_type();
+
+#define loop_EXTRAS \
+Symbol check_type();
+
+#define typcase_EXTRAS \
+Symbol check_type();
+
+#define block_EXTRAS \
+Symbol check_type();
+
+#define let_EXTRAS \
+Symbol check_type();
+
+#define plus_EXTRAS \
+Symbol check_type();
+
+#define sub_EXTRAS \
+Symbol check_type();
+
+#define mul_EXTRAS \
+Symbol check_type();
+
+#define divide_EXTRAS \
+Symbol check_type();
+
+#define neg_EXTRAS \
+Symbol check_type();
+
+#define lt_EXTRAS \
+Symbol check_type();
+
+#define eq_EXTRAS \
+Symbol check_type();
+
+#define leq_EXTRAS \
+Symbol check_type();
+
+#define comp_EXTRAS \
+Symbol check_type();
+
+#define int_const_EXTRAS \
+Symbol check_type();
+
+#define bool_const_EXTRAS \
+Symbol check_type();
+
+#define string_const_EXTRAS \
+Symbol check_type();
+
+#define new__EXTRAS \
+Symbol check_type();
+
+#define isvoid_EXTRAS   \
+Symbol check_type();
+
+#define no_expr_EXTRAS      \
+Symbol check_type();
+
+#define object_EXTRAS \
+Symbol check_type();
+
+
 #endif
+

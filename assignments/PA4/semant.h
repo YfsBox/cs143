@@ -42,7 +42,6 @@ private:
   bool NameTypeValid(Symbol name);
   bool check_method_name(Symbol cls, method_class *feature);
   bool check_attr_name(Symbol cls, attr_class *feature);
-  void install_information();
   void install_methods_and_attrs();
   std::list<Class_> get_class_chain(Class_ cls);
 
