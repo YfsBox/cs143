@@ -159,12 +159,6 @@ public:
    }
    Class_ copy_Class_();
    void dump(ostream& stream, int n);
-   Symbol get_name() const {
-       return name;
-   }
-   Symbol get_parent() const {
-       return parent;
-   }
 
 #ifdef Class__SHARED_EXTRAS
    Class__SHARED_EXTRAS

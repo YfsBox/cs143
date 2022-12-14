@@ -150,7 +150,7 @@ class class__class : public Class__class {
 public:
    Symbol name;
    Symbol parent;
-   Features features;
+   Features features; // 是一个个feature_class的指针
    Symbol filename;
 public:
    class__class(Symbol a1, Symbol a2, Features a3, Symbol a4) {

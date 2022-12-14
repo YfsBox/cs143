@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <iostream>
 #include <map>
+#include <vector>
 #include <list>
 #include "cool-tree.h"
 #include "stringtab.h"
@@ -28,8 +29,9 @@ private:
   int semant_errors;
   void install_basic_classes();
   ostream& error_stream;
-  std::map<Symbol, std::list<Symbol> > class_graph_;
+  std::map<Symbol, std::list<Symbol>> class_graph_;
   std::map<Symbol, Class_> class_name_map_;
+  std::map<Symbol, std::list<method_class>> methods_table_;
 
   bool check_loop();
   void InitInClass(class__class *cls) {
@@ -37,9 +39,12 @@ private:
       class_name_map_[cls->get_name()] = cls;
   }
   bool NameTypeValid(Symbol name);
+  void install_information();
+  std::vector<Class_> get_class_chain(Class_ cls);
 
 public:
   ClassTable(Classes);
+  void show_chains() ;
   int errors() { return semant_errors; }
   ostream& semant_error();
   ostream& semant_error(Class_ c);

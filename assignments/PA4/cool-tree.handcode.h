@@ -61,8 +61,10 @@ virtual void dump_with_types(ostream&,int) = 0;
 
 #define class__EXTRAS                                 \
 Symbol get_filename() { return filename; }             \
-void dump_with_types(ostream&,int);                    
-
+void dump_with_types(ostream&,int);                   \
+Symbol get_name() const { return name; }                \
+Symbol get_parent() const { return parent; }          \
+Features get_features() const { return features; }
 
 #define Feature_EXTRAS                                        \
 virtual void dump_with_types(ostream&,int) = 0; 

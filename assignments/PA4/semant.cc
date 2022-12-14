@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <memory>
+#include <vector>
 #include <stack>
 #include "semant.h"
 #include "utilities.h"
@@ -94,10 +95,6 @@ bool ClassTable::check_loop() {
             in_map[symbol]++;
         }
     }
-    /*for (auto in_pair : in_map) {
-        printf("%d ", in_pair.second);
-    }
-    printf("\n");*/
     for (auto class_pair : class_graph_) {
         auto class_symbol = class_pair.first;
         if (in_map[class_symbol] == 0) {
@@ -120,6 +117,28 @@ bool ClassTable::check_loop() {
     return cnt != class_name_map_.size(); // 如果是true就是有环的
 }
 
+std::vector<Class_> ClassTable::get_class_chain(Class_ cls) {
+    std::vector<Class_> chain;
+    chain.reserve(8);
+    Symbol curr_symbol;
+    Symbol parent_symbol;
+    Class_ curr_class = cls;
+    while (true) {
+        chain.push_back(curr_class);
+        class__class *curr_class_class = dynamic_cast<class__class*> (curr_class);
+        curr_symbol = curr_class_class->get_name();
+        if (!NameTypeValid(curr_symbol) || curr_symbol == Object) { // 检查是否到达继承的终点
+            break;
+        }
+        parent_symbol = curr_class_class->get_parent();
+        curr_class = class_name_map_[parent_symbol];
+    }
+    /*printf("chain:\n");
+    for (auto cls : chain) {
+        dump_Symbol(error_stream, 1, dynamic_cast<class__class*>(cls)->get_name());
+    }*/
+    return chain;
+}
 
 ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) {
     /* Fill this in */
@@ -148,7 +167,6 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) 
     if (findmain == class_name_map_.end()) {
         semant_error() << "not have main object\n";
     }
-
     /* 检查是否有未定义的继承，并且构造继承图 */
     for (int i = classes->first(); classes->more(i) == TRUE; i = classes->next(i)) {
         curr_elem = dynamic_cast<class__class*>(classes->nth(i));
@@ -173,11 +191,9 @@ bool ClassTable::NameTypeValid(Symbol name) {
 }
 
 void ClassTable::install_basic_classes() {
-
     // The tree package uses these globals to annotate the classes built below.
    // curr_lineno  = 0;
     Symbol filename = stringtable.add_string("<basic class>");
-    
     // The following demonstrates how to create dummy parse trees to
     // refer to basic Cool classes.  There's no need for method
     // bodies -- these are already built into the runtime system.
@@ -238,7 +254,6 @@ void ClassTable::install_basic_classes() {
     //
     Class_ Bool_class =
 	class_(Bool, Object, single_Features(attr(val, prim_slot, no_expr())),filename);
-
     //
     // The class Str has a number of slots and operations:
     //       val                                  the length of the string
@@ -272,6 +287,19 @@ void ClassTable::install_basic_classes() {
     InitInClass(dynamic_cast<class__class*> (Int_class));
     InitInClass(dynamic_cast<class__class*> (Bool_class));
     InitInClass(dynamic_cast<class__class*> (Str_class));
+}
+
+void ClassTable::install_information() {
+    Symbol curr_symbol;
+    class__class *curr_class;
+    Features curr_features;
+    for (auto sc : class_name_map_) {
+        curr_symbol = sc.first;
+        curr_class = dynamic_cast<class__class*> (sc.second);
+        curr_features = curr_class->get_features();
+
+
+    }
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -321,13 +349,21 @@ ostream& ClassTable::semant_error()
      errors. Part 2) can be done in a second stage, when you want
      to build mycoolc.
 */
+void ClassTable::show_chains() {
+    class__class* curr_class;
+    for (auto cls : class_name_map_) {
+        // curr_class = dynamic_cast<class__class*> (cls.second);
+        auto chain = get_class_chain(cls.second);
+    }
+}
+
 void program_class::semant()
 {
     initialize_constants();
     /* ClassTable constructor may do some semantic analysis */
     ClassTable *classtable = new ClassTable(classes);  // 根据classes的list可以得到一个ClassTable
     /* some semantic analysis code may go here */
-
+    classtable->show_chains();
     if (classtable->errors()) {
 	cerr << "Compilation halted due to static semantic errors." << endl;
 	exit(1);
