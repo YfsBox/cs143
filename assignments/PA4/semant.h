@@ -32,6 +32,7 @@ private:
   std::map<Symbol, std::list<Symbol>> class_graph_;
   std::map<Symbol, Class_> class_name_map_;
   std::map<Symbol, std::list<method_class*>> methods_table_;
+  std::map<Symbol, std::list<attr_class*>> attrs_table_;
 
   bool check_loop();
   void InitInClass(class__class *cls) {
@@ -40,13 +41,15 @@ private:
   }
   bool NameTypeValid(Symbol name);
   bool check_method_name(Symbol cls, method_class *feature);
+  bool check_attr_name(Symbol cls, attr_class *feature);
   void install_information();
-  void install_methods();
+  void install_methods_and_attrs();
   std::vector<Class_> get_class_chain(Class_ cls);
 
 public:
   ClassTable(Classes);
   void show_chains() ;
+  void check_and_install();
   int errors() { return semant_errors; }
   ostream& semant_error();
   ostream& semant_error(Class_ c);

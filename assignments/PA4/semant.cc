@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include <stack>
+#include <symtab.h>
 #include "semant.h"
 #include "utilities.h"
 
@@ -13,6 +14,8 @@
 extern int semant_debug;
 extern char *curr_filename;
 
+typedef SymbolTable<Symbol, Symbol> ObjectEnvTable; // object表
+ObjectEnvTable objectEnv;
 //////////////////////////////////////////////////////////////////////
 //
 // Symbols
@@ -150,7 +153,17 @@ bool ClassTable::check_method_name(Symbol cls, method_class *feature) {
     return true;
 }
 
-void ClassTable::install_methods() {
+bool ClassTable::check_attr_name(Symbol cls, attr_class *feature) {
+    auto findit = attrs_table_.find(cls);
+    for (auto attr : findit->second) {
+        if (attr->get_name() == feature->get_name()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void ClassTable::install_methods_and_attrs() {
     class__class *curr_class;
     Features curr_features;
     for (auto cls_pair : class_name_map_) {
@@ -158,19 +171,27 @@ void ClassTable::install_methods() {
         curr_features = curr_class->get_features();
         Feature curr_feature;
         methods_table_[curr_class->get_name()] = {};
+        attrs_table_[curr_class->get_name()] = {};
         for (int i = curr_features->first(); curr_features->more(i) == TRUE; i = curr_features->next(i)) {
             curr_feature = curr_features->nth(i);
             // 首先检查名称合法性
-            if (curr_feature->is_attr()) { // 属于method类型
-                continue;   // 属于attr类型,暂且continue
+            if (!curr_feature->is_attr()) { // 属于method类型
+                method_class *curr_method = dynamic_cast<method_class *> (curr_feature);
+                if (!check_method_name(curr_class->get_name(), curr_method)) { // 该method重复name应该忽略
+                    semant_error(curr_class) << curr_class->get_name() << " the method " << curr_method->get_name()
+                                             << " redifinetion.\n";
+                    continue;
+                }
+                methods_table_[curr_class->get_name()].push_back(curr_method); // 加入到method_table中
+            } else {
+                attr_class *curr_attr = dynamic_cast<attr_class *> (curr_feature);
+                if (!check_attr_name(curr_class->get_name(), curr_attr)) {
+                    semant_error(curr_class) << curr_class->get_name() << "the attr " << curr_attr->get_name()
+                                << " redefinetion.\n";
+                    continue;
+                }
+                attrs_table_[curr_class->get_name()].push_back(curr_attr);
             }
-            method_class *curr_method = dynamic_cast<method_class*> (curr_feature);
-            if (!check_method_name(curr_class->get_name(), curr_method)) { // 该method重复name应该忽略
-                semant_error(curr_class) << curr_class->get_name() << " the method " <<curr_method->get_name()
-                        << " redifinetion.\n";
-                continue;
-            }
-            methods_table_[curr_class->get_name()].push_back(curr_method); // 加入到method_table中
         }
     }
     /*
@@ -228,7 +249,7 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) 
     if (have_loop) {
         semant_error() << "ring appears in an inheritance relationship\n";
     }
-    install_methods();
+    install_methods_and_attrs();
 }
 
 bool ClassTable::NameTypeValid(Symbol name) {
@@ -343,7 +364,14 @@ void ClassTable::install_information() {
         curr_class = dynamic_cast<class__class*> (sc.second);
         curr_features = curr_class->get_features();
 
+        auto chain = get_class_chain(sc.second); // 获取继承链
+        // 根据继承链,来将所有的attr加入到object_env中,其中需要注意作用域
 
+
+        // 正式地检查method和type
+
+
+        // 离开作用域，弹出
     }
 }
 
@@ -402,6 +430,20 @@ void ClassTable::show_chains() {
     }
 }
 
+void ClassTable::check_and_install() {
+    // 首先根据继承链,将object载入
+    Symbol class_symbol;
+    class__class *curr_class;
+    for (auto cls_pair : class_name_map_) {
+        class_symbol = cls_pair.first;
+        curr_class = dynamic_cast<class__class*> (cls_pair.second);
+
+
+
+
+    }
+}
+
 void program_class::semant()
 {
     initialize_constants();
@@ -409,6 +451,7 @@ void program_class::semant()
     ClassTable *classtable = new ClassTable(classes);  // 根据classes的list可以得到一个ClassTable
     /* some semantic analysis code may go here */
     classtable->show_chains();
+    classtable->check_and_install();
     if (classtable->errors()) {
 	cerr << "Compilation halted due to static semantic errors." << endl;
 	exit(1);

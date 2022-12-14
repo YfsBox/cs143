@@ -111,6 +111,7 @@ Symbol get_name() { return name; }  \
 Formals get_formals() { return formals; }
 
 #define attr_EXTRAS \
-bool is_attr() { return true; }
+bool is_attr() { return true; } \
+Symbol get_name() { return name;}
 
 #endif
