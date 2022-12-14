@@ -16,6 +16,8 @@ extern char *curr_filename;
 
 typedef SymbolTable<Symbol, Symbol> ObjectEnvTable; // object表
 ObjectEnvTable objectEnv;
+
+ClassTable* classtable = nullptr;
 //////////////////////////////////////////////////////////////////////
 //
 // Symbols
@@ -140,6 +142,14 @@ std::list<Class_> ClassTable::get_class_chain(Class_ cls) {
         dump_Symbol(error_stream, 1, dynamic_cast<class__class*>(cls)->get_name());
     }*/
     return chain;
+}
+
+Class_ ClassTable::get_class_byname(Symbol name) const {
+    auto findit = class_name_map_.find(name);
+    if (findit != class_name_map_.end()) {
+        return findit->second;
+    }
+    return nullptr;
 }
 
 bool ClassTable::check_method_name(Symbol cls, method_class *feature) {
@@ -397,7 +407,6 @@ void ClassTable::check_and_install() {
 //
 // semant_error is an overloaded function for reporting errors
 // during semantic analysis.  There are three versions:
-//
 //    ostream& ClassTable::semant_error()                
 //
 //    ostream& ClassTable::semant_error(Class_ c)
@@ -477,23 +486,52 @@ Symbol let_class::check_type() {
 }
 
 Symbol plus_class::check_type() {
-    return Object;
+    Symbol e1_type = e1->check_type();
+    Symbol e2_type = e2->check_type();
+    if (e1_type != Int || e2_type != Int) {
+        classtable->semant_error() << "the e1 or e2 is not Int type in a plus_class\n";
+    }
+    type = Int;
+    return type;
 }
 
 Symbol sub_class::check_type() {
-    return Object;
+    Symbol e1_type = e1->check_type();
+    Symbol e2_type = e2->check_type();
+    if (e1_type != Int || e2_type != Int) {
+        classtable->semant_error() << "the e1 or e2 is not Int type in a sub_class\n";
+    }
+    type = Int;
+    return type;
 }
 
 Symbol mul_class::check_type() {
-    return Object;
+    Symbol e1_type = e1->check_type();
+    Symbol e2_type = e2->check_type();
+    if (e1_type != Int || e2_type != Int) {
+        classtable->semant_error() << "the e1 or e2 is not Int type in a mul_class\n";
+    }
+    type = Int;
+    return type;
 }
 
 Symbol divide_class::check_type() {
-    return Object;
+    Symbol e1_type = e1->check_type();
+    Symbol e2_type = e2->check_type();
+    if (e1_type != Int || e2_type != Int) {
+        classtable->semant_error() << "the e1 or e2 is not Int type in a divide_class\n";
+    }
+    type = Int;
+    return type;
 }
 
 Symbol neg_class::check_type() {
-    return Object;
+    Symbol expr_type = e1->check_type();
+    if (expr_type != Int) {
+        classtable->semant_error() << "The neg_class is not int\n";
+    }
+    type = Int;
+    return type;
 }
 
 Symbol lt_class::check_type() {
@@ -501,6 +539,19 @@ Symbol lt_class::check_type() {
 }
 
 Symbol eq_class::check_type() {
+    Symbol e1_type = e1->check_type();
+    Symbol e2_type = e2->check_type();
+
+    if (e1_type != Int && e1_type != Bool && e1_type != Str) {
+        classtable->semant_error() << "The e1 type error(not Int, Bool, Str) in eq_class\n";
+    }
+    if (e2_type != Int && e2_type != Bool && e2_type != Str) {
+        classtable->semant_error() << "The e2 type error(not Int, Bool, Str) in eq_class\n";
+    }
+    if (e2_type != e1_type) {
+        classtable->semant_error() << "The e1 type != e2 type\n";
+    }
+    type = Bool;
     return Object;
 }
 
@@ -509,23 +560,41 @@ Symbol leq_class::check_type() {
 }
 
 Symbol comp_class::check_type() {
-    return Object;
+    Symbol e1_type = e1->check_type();
+    if (e1_type != Bool) {
+        classtable->semant_error() << "the e1 is not Bool in comp_class\n";
+    }
+    type = Bool;
+    return type;
 }
 
 Symbol int_const_class::check_type() {
-    return Object;
+    type = Int;
+    return type;
 }
 
 Symbol bool_const_class::check_type() {
-    return Object;
+    type = Bool;
+    return type;
 }
 
 Symbol string_const_class::check_type() {
-    return Object;
+    type = Str;
+    return type;
 }
 
 Symbol new__class::check_type() {
-    return Object;
+    Symbol type_name = type_name;
+    if (type_name == SELF_TYPE) {
+        classtable->semant_error() << "Can't new a SELF_TYPE object\n";
+        type = Object;
+    } else if (classtable->get_class_byname(type_name) == nullptr) {
+        classtable->semant_error() << "The Object type not declare\n";
+        type = Object;
+    } else {
+        type = type_name;
+    }
+    return type;
 }
 
 Symbol isvoid_class::check_type() {
@@ -533,7 +602,8 @@ Symbol isvoid_class::check_type() {
 }
 
 Symbol no_expr_class::check_type() {
-    return Object;
+    type = No_type;
+    return type;
 }
 
 Symbol object_class::check_type() {
@@ -548,7 +618,7 @@ void program_class::semant()
 {
     initialize_constants();
     /* ClassTable constructor may do some semantic analysis */
-    ClassTable *classtable = new ClassTable(classes);  // 根据classes的list可以得到一个ClassTable
+    classtable = new ClassTable(classes);  // 根据classes的list可以得到一个ClassTable
     /* some semantic analysis code may go here */
     classtable->show_chains();
     classtable->check_and_install();

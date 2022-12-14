@@ -49,6 +49,7 @@ public:
   ClassTable(Classes);
   void show_chains() ;
   void check_and_install();
+  Class_ get_class_byname(Symbol name) const;
   int errors() { return semant_errors; }
   ostream& semant_error();
   ostream& semant_error(Class_ c);
