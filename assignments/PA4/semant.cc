@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include <stack>
+#include <set>
 #include <symtab.h>
 #include "semant.h"
 #include "utilities.h"
@@ -508,7 +509,13 @@ void ClassTable::show_chains() {
 }
 
 Symbol branch_class::check_type() {
-    return Object;
+    objectEnv.enterscope();
+    Symbol decl_type = type_decl;
+    Symbol var_name = name;
+    objectEnv.addid(var_name, new Symbol(decl_type));
+    Symbol type = expr->check_type();
+    objectEnv.exitscope();
+    return type;
 }
 
 Symbol static_dispatch_class::check_type() {
@@ -520,7 +527,18 @@ Symbol dispatch_class::check_type() {
 }
 
 Symbol cond_class::check_type() {
-    return Object;
+    Symbol pred_type = pred->check_type();
+    if (pred_type != Bool) {
+        classtable->semant_error() << "The type of pred is not Bool\n";
+    }
+
+    Symbol then_type = then_exp->check_type();
+    Symbol else_type = else_exp->check_type();
+    Class_ then_class = classtable->get_class_byname(then_type);
+    Class_ else_class = classtable->get_class_byname(else_type);
+
+    type = classtable->find_lastcommon_root(then_class, else_class);
+    return type;
 }
 
 Symbol loop_class::check_type() {
@@ -534,11 +552,41 @@ Symbol loop_class::check_type() {
 }
 
 Symbol typcase_class::check_type() {
-    return Object;
+    Symbol type0 = expr->check_type();
+    Case case_class;
+    Symbol case_symbol, last_case_symbol;
+    std::set<Symbol> symbol_sets;
+    for (int i = cases->first(); cases->more(i) == TRUE; i = cases->next(i)) {
+        case_class = cases->nth(i);
+        case_symbol = case_class->check_type();
+        auto findit = symbol_sets.find(case_symbol);
+        if (findit != symbol_sets.end()) {
+            classtable->semant_error() << "The brach type is repeat\n";
+        } else {
+            symbol_sets.insert(case_symbol);
+        }
+        if (i > 0) {
+            last_case_symbol = classtable->find_lastcommon_root(
+                    classtable->get_class_byname(case_symbol),
+                    classtable->get_class_byname(last_case_symbol));
+        } else {
+            last_case_symbol = case_symbol;
+        }
+    }
+    type = last_case_symbol;
+    return type;
 }
 
 Symbol block_class::check_type() {
-    return Object;
+    auto exprs = body;
+    Expression_class *expr;
+    Symbol expr_type;
+    for (int i = exprs->first(); exprs->more(i) == TRUE; i = exprs->next(i)) {
+        expr = exprs->nth(i);
+        expr_type = expr->check_type();
+    }
+    type = expr_type;
+    return type;
 }
 
 Symbol let_class::check_type() {
@@ -595,7 +643,13 @@ Symbol neg_class::check_type() {
 }
 
 Symbol lt_class::check_type() {
-    return Object;
+    Symbol e1_type = e1->check_type();
+    Symbol e2_type = e2->check_type();
+    if (e1_type != Int || e2_type != Int) {
+        classtable->semant_error() << "The e1 or e2 is not Int type in lt class\n";
+    }
+    type = Bool;
+    return type;
 }
 
 Symbol eq_class::check_type() {
@@ -619,7 +673,7 @@ Symbol leq_class::check_type() {
     Symbol e1_type = e1->check_type();
     Symbol e2_type = e2->check_type();
     if (e1_type != Int || e2_type != Int) {
-        classtable->semant_error() << "The e1 or e2 is not Int type\n";
+        classtable->semant_error() << "The e1 or e2 is not Int type in leq class\n";
     }
     type = Bool;
     return type;
@@ -675,15 +729,24 @@ Symbol no_expr_class::check_type() {
 }
 
 Symbol object_class::check_type() {
-    return Object;
+    Symbol *object_type = objectEnv.lookup(name);
+    if (object_type == nullptr) {
+        classtable->semant_error() << "the object type "<< name <<" is not declare\n";
+        type = Object;
+        return type;
+    }
+    type = *object_type;
+    return type;
 }
 
 Symbol assign_class::check_type() {
-    Symbol *id_type = objectEnv.lookup(name);
+    Symbol *id_type = objectEnv.lookup(name); // 这个变量是之前已经声明过的变量
+    Symbol expr_type = expr->check_type();
     if (id_type == nullptr) {
         classtable->semant_error() << name <<" the name of object is not defined\n";
+        type = expr_type;
+        return type;
     }
-    Symbol expr_type = expr->check_type();
     Class_ id_class = classtable->get_class_byname(*id_type);
     Class_ expr_class = classtable->get_class_byname(expr_type);
     if (!type_less_or_equal(expr_class, id_class)) {
