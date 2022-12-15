@@ -150,7 +150,7 @@ std::list<Class_> ClassTable::get_class_chain(Class_ cls) {
         chain.push_front(curr_class);  // 从开头加入
         class__class *curr_class_class = dynamic_cast<class__class*> (curr_class);
         curr_symbol = curr_class_class->get_name();
-        if (!NameTypeValid(curr_symbol) || curr_symbol == Object) { // 检查是否到达继承的终点
+        if (curr_symbol == Object) { // 检查是否到达继承的终点
             break;
         }
         parent_symbol = curr_class_class->get_parent();
@@ -191,6 +191,26 @@ bool ClassTable::check_attr_name(Symbol cls, attr_class *feature) {
     return true;
 }
 
+Symbol ClassTable::find_lastcommon_root(Class_ cls1, Class_ cls2) {
+    auto chain_list1 = get_class_chain(cls1);
+    auto chain_list2 = get_class_chain(cls2);
+
+    uint min_size = std::min(chain_list1.size(), chain_list2.size());
+    auto chain_list1_it = chain_list1.begin();
+    auto chain_list2_it = chain_list2.begin();
+    for (uint i = 0; i < min_size; i++) {
+        Symbol symbol1 = dynamic_cast<class__class*> (*chain_list1_it)->get_name();
+        Symbol symbol2 = dynamic_cast<class__class*> (*chain_list2_it)->get_name();
+        if (symbol1 != symbol2) {
+            break;
+        }
+        chain_list1_it++;
+        chain_list2_it++;
+    }
+    chain_list1_it--;
+    return dynamic_cast<class__class*> (*chain_list1_it)->get_name();
+}
+
 void ClassTable::install_methods_and_attrs() {
     class__class *curr_class;
     Features curr_features;
@@ -222,8 +242,7 @@ void ClassTable::install_methods_and_attrs() {
             }
         }
     }
-    /*
-    for (auto methods_pair : methods_table_) {
+    /*for (auto methods_pair : methods_table_) {
         semant_error() << methods_pair.first << ":\n";
         for (auto method : methods_pair.second) {
             semant_error() << method->get_name() << " ";
@@ -233,7 +252,7 @@ void ClassTable::install_methods_and_attrs() {
 }
 
 
-ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) {
+ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr), error_stream(cerr) {
     /* Fill this in */
     install_basic_classes();
     class__class *curr_elem;
@@ -381,13 +400,22 @@ void ClassTable::install_basic_classes() {
     InitInClass(dynamic_cast<class__class*> (Int_class));
     InitInClass(dynamic_cast<class__class*> (Bool_class));
     InitInClass(dynamic_cast<class__class*> (Str_class));
+    class_graph_[Object].push_back(IO);
+    class_graph_[Object].push_back(Int);
+    class_graph_[Object].push_back(Bool);
+    class_graph_[Object].push_back(Str);
+}
+
+Class_ ClassTable::get_curr_class() const {
+    return curr_class_;
 }
 
 void ClassTable::check_and_install() {
     Symbol curr_class_name;
     class__class *curr_class;
     Features curr_features;
-    for (auto sc : class_name_map_) {
+    for (const auto sc : class_name_map_) {
+        curr_class_ = sc.second;
         curr_class_name = sc.first;
         curr_class = dynamic_cast<class__class*> (sc.second);
         curr_features = curr_class->get_features();
@@ -468,10 +496,17 @@ ostream& ClassTable::semant_error()
 void ClassTable::show_chains() {
     class__class* curr_class;
     for (auto cls : class_name_map_) {
-        // curr_class = dynamic_cast<class__class*> (cls.second);
+        curr_class = dynamic_cast<class__class*> (cls.second);
         auto chain = get_class_chain(cls.second);
+        semant_error() << curr_class->get_name() << '\n';
+        for (auto chain_class : chain) {
+            class__class *chain_class_class = dynamic_cast<class__class*> (chain_class);
+            semant_error() << chain_class_class->get_name() << ' ';
+        }
+        semant_error() << '\n';
     }
 }
+
 Symbol branch_class::check_type() {
     return Object;
 }
@@ -581,7 +616,13 @@ Symbol eq_class::check_type() {
 }
 
 Symbol leq_class::check_type() {
-    return Object;
+    Symbol e1_type = e1->check_type();
+    Symbol e2_type = e2->check_type();
+    if (e1_type != Int || e2_type != Int) {
+        classtable->semant_error() << "The e1 or e2 is not Int type\n";
+    }
+    type = Bool;
+    return type;
 }
 
 Symbol comp_class::check_type() {
@@ -609,15 +650,15 @@ Symbol string_const_class::check_type() {
 }
 
 Symbol new__class::check_type() {
-    Symbol type_name = type_name;
-    if (type_name == SELF_TYPE) {
+    Symbol tp_name = type_name;
+    if (tp_name == SELF_TYPE) {
         classtable->semant_error() << "Can't new a SELF_TYPE object\n";
         type = Object;
-    } else if (classtable->get_class_byname(type_name) == nullptr) {
+    } else if (classtable->get_class_byname(tp_name) == nullptr) {
         classtable->semant_error() << "The Object type not declare\n";
         type = Object;
     } else {
-        type = type_name;
+        type = tp_name;
     }
     return type;
 }
@@ -638,7 +679,7 @@ Symbol object_class::check_type() {
 }
 
 Symbol assign_class::check_type() {
-    Symbol *id_type = objectEnv->lookup(name);
+    Symbol *id_type = objectEnv.lookup(name);
     if (id_type == nullptr) {
         classtable->semant_error() << name <<" the name of object is not defined\n";
     }
@@ -652,6 +693,15 @@ Symbol assign_class::check_type() {
     return type;
 }
 
+void ClassTable::test_find_lc_root() {
+    for (auto name_i : class_name_map_) {
+        for (auto name_j : class_name_map_) {
+            semant_error() << name_i.first << " and " << name_j.first
+            << " lc root is " << find_lastcommon_root(name_i.second, name_j.second) << "\n";
+        }
+    }
+}
+
 void program_class::semant()
 {
     initialize_constants();
@@ -659,6 +709,7 @@ void program_class::semant()
     classtable = new ClassTable(classes);  // 根据classes的list可以得到一个ClassTable
     /* some semantic analysis code may go here */
     classtable->show_chains();
+    // classtable->test_find_lc_root();
     classtable->check_and_install();
     if (classtable->errors()) {
 	    cerr << "Compilation halted due to static semantic errors." << endl;

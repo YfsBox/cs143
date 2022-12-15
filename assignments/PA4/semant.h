@@ -27,6 +27,7 @@ typedef ClassTable *ClassTableP;
 class ClassTable {
 private:
   int semant_errors;
+  Class_ curr_class_;
   void install_basic_classes();
   ostream& error_stream;
   std::map<Symbol, std::list<Symbol>> class_graph_;
@@ -42,6 +43,7 @@ private:
   bool NameTypeValid(Symbol name);
   bool check_method_name(Symbol cls, method_class *feature);
   bool check_attr_name(Symbol cls, attr_class *feature);
+  Symbol find_lastcommon_root(Class_ cls1, Class_ cls2);
   void install_methods_and_attrs();
 
 public:
@@ -49,8 +51,12 @@ public:
   void show_chains() ;
   void check_and_install();
   Class_ get_class_byname(Symbol name) const;
+  Class_ get_curr_class() const;
   std::list<Class_> get_class_chain(Class_ cls);
   int errors() { return semant_errors; }
+  // some test function
+  void test_find_lc_root();
+
   ostream& semant_error();
   ostream& semant_error(Class_ c);
   ostream& semant_error(Symbol filename, tree_node *t);

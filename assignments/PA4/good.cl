@@ -26,3 +26,11 @@ Class B inherits A {
 
 
 };
+
+class D inherits B {
+
+};
+
+class F inherits A {
+
+};
