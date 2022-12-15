@@ -89,6 +89,25 @@ static void initialize_constants(void)
     val         = idtable.add_string("_val");
 }
 
+static bool type_less_or_equal(Class_ class1, Class_ class2) {
+    class__class *class_class1 = dynamic_cast<class__class*> (class1);
+    class__class *class_class2 = dynamic_cast<class__class*> (class2);
+    Symbol type1 = class_class1->get_name();
+    Symbol type2 = class_class2->get_name();
+    if (type1 == type2) {
+        return true;
+    }
+    auto chain = classtable->get_class_chain(class1);
+    for (auto chain_class : chain) {
+        class__class *chain__class_class = dynamic_cast<class__class*> (chain_class);
+        Symbol chain_type = chain__class_class->get_name();
+        if (chain_type == type2) {
+            return true;
+        }
+    }
+    return true;
+}
+
 bool ClassTable::check_loop() {
     std::stack<Symbol> st;
     std::map<Symbol, int> in_map;
@@ -470,7 +489,13 @@ Symbol cond_class::check_type() {
 }
 
 Symbol loop_class::check_type() {
-    return Object;
+    Symbol e1_type = pred->check_type();
+    if (e1_type != Bool) {
+        classtable->semant_error() << "the pred type is not Bool in loop_class\n";
+    }
+    Symbol e2_type = body->check_type();
+    type = Object;
+    return type;
 }
 
 Symbol typcase_class::check_type() {
@@ -598,7 +623,9 @@ Symbol new__class::check_type() {
 }
 
 Symbol isvoid_class::check_type() {
-    return Object;
+    Symbol e1_type = e1->check_type();
+    type = Bool;
+    return type;
 }
 
 Symbol no_expr_class::check_type() {
@@ -611,7 +638,18 @@ Symbol object_class::check_type() {
 }
 
 Symbol assign_class::check_type() {
-    return Object;
+    Symbol *id_type = objectEnv->lookup(name);
+    if (id_type == nullptr) {
+        classtable->semant_error() << name <<" the name of object is not defined\n";
+    }
+    Symbol expr_type = expr->check_type();
+    Class_ id_class = classtable->get_class_byname(*id_type);
+    Class_ expr_class = classtable->get_class_byname(expr_type);
+    if (!type_less_or_equal(expr_class, id_class)) {
+        classtable->semant_error() << "the type of expr: " << expr_type << "not <= the type of id: " << id_type << "\n";
+    }
+    type = expr_type;
+    return type;
 }
 
 void program_class::semant()
