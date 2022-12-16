@@ -90,19 +90,19 @@ static void initialize_constants(void)
     val         = idtable.add_string("_val");
 }
 
-static bool type_less_or_equal(Class_ class1, Class_ class2) {
-    class__class *class_class1 = dynamic_cast<class__class*> (class1);
-    class__class *class_class2 = dynamic_cast<class__class*> (class2);
+static bool type_less_or_equal(Symbol class1, Symbol class2) {
+    class__class *class_class1 = dynamic_cast<class__class*> (classtable->get_class_byname(class1));
+    class__class *class_class2 = dynamic_cast<class__class*> (classtable->get_class_byname(class2));
+
     Symbol type1 = class_class1->get_name();
     Symbol type2 = class_class2->get_name();
     if (type1 == type2) {
         return true;
     }
-    auto chain = classtable->get_class_chain(class1);
+    auto chain = classtable->get_class_chain(classtable->get_class_byname(class1));
     for (auto chain_class : chain) {
         class__class *chain__class_class = dynamic_cast<class__class*> (chain_class);
-        Symbol chain_type = chain__class_class->get_name();
-        if (chain_type == type2) {
+        if (chain__class_class->get_name() == type2) {
             return true;
         }
     }
@@ -453,7 +453,7 @@ void ClassTable::check_and_install() {
             auto findit = class_name_map_.find(init_type);
             if (findit == class_name_map_.end()) { // 表示attr中init对应的表达式根本不存在
                 semant_error(curr_class_) << "the attr " << curr_attr->get_name() << "'s init type is not defined\n";
-            } else if (!type_less_or_equal(findit->second, class_name_map_[curr_attr_type])) { // 不是 <=的关系
+            } else if (!type_less_or_equal(init_type, curr_attr_type)) { // 不是 <=的关系
                 semant_error(curr_class_) << "the attr type is " << curr_attr_type << " the init type is " <<
                     init_type << " not satisfiy <=\n";
             }
@@ -488,7 +488,7 @@ void ClassTable::check_and_install() {
                     class_name_map_.find(expr_type) == class_name_map_.end()) { // 找不到这个type
                 semant_error(curr_class_) << "the method return_type "<< return_type
                 <<"is not defined\n";
-            } else if (!type_less_or_equal(class_name_map_[return_type], class_name_map_[expr_type])) {
+            } else if (!type_less_or_equal(return_type, expr_type)) {
                 semant_error(curr_class_) << "the expr type is not <= return type\n";
             }
             objectEnv.exitscope();
@@ -595,7 +595,7 @@ Symbol static_dispatch_class::check_type() {
     // 然后检查type_name是否存在
     if (classtable->get_class_byname(type_name) == nullptr) {
         classtable->semant_error() << "the type_name "<< type_name <<" in static dispatch is not exsit\n";
-    } else if (!type_less_or_equal(classtable->get_class_byname(expr0_type), classtable->get_class_byname(type_name))) { // 判断是否符合T0 <= T的
+    } else if (!type_less_or_equal(expr0_type, type_name)) { // 判断是否符合T0 <= T的
         classtable->semant_error() << "the expr0 "<< expr0_type <<" is not <= type_name in static_dispatch_class\n";
     }
     // 或者这个method的相关信息
@@ -614,7 +614,7 @@ Symbol static_dispatch_class::check_type() {
         Symbol expr_type = expr->check_type();
         curr_formal = dynamic_cast<formal_class*> (method_formals->nth(i - 1));
         Symbol formal_type = curr_formal->get_type();
-        if (!type_less_or_equal(classtable->get_class_byname(expr_type), classtable->get_class_byname(formal_type))) {
+        if (!type_less_or_equal(expr_type, formal_type)) {
             classtable->semant_error() << "the formal is " << formal_type <<" but the type " << expr_type << "is error in method"
                     << method->get_name() << '\n';
         }
@@ -652,7 +652,7 @@ Symbol dispatch_class::check_type() {
         curr_formal = dynamic_cast<formal_class*> (method_formals->nth(i));
         Symbol formal_type = curr_formal->get_type();
 
-        if (!type_less_or_equal(classtable->get_class_byname(curr_expr_type), classtable->get_class_byname(formal_type))) {
+        if (!type_less_or_equal(curr_expr_type, formal_type)) {
             classtable->semant_error() << "the formal is " << formal_type <<" but the type " << expr_type << "is error in method"
                                        << method->get_name() << '\n';
         }
@@ -738,7 +738,7 @@ Symbol let_class::check_type() {
         if (type_decl == SELF_TYPE) {
             decl_type = dynamic_cast<class__class *>(classtable->get_curr_class())->get_name();
         }
-        if (!type_less_or_equal(classtable->get_class_byname(e1_type), classtable->get_class_byname(decl_type))) {
+        if (!type_less_or_equal(e1_type, decl_type)) {
             classtable->semant_error() << "the init type not <= decl type\n";
             type = Object;
             return type;
@@ -906,9 +906,7 @@ Symbol assign_class::check_type() {
         type = expr_type;
         return type;
     }
-    Class_ id_class = classtable->get_class_byname(*id_type);
-    Class_ expr_class = classtable->get_class_byname(expr_type);
-    if (!type_less_or_equal(expr_class, id_class)) {
+    if (!type_less_or_equal(*id_type, expr_type)) {
         classtable->semant_error() << "the type of expr: " << expr_type << "not <= the type of id: " << id_type << "\n";
     }
     type = expr_type;
