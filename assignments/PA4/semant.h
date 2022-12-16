@@ -50,6 +50,7 @@ public:
   void show_chains() ;
   void check_and_install();
   Class_ get_class_byname(Symbol name) const;
+  method_class *get_method(Class_ cls, Symbol name);
   Class_ get_curr_class() const;
   Symbol find_lastcommon_root(Class_ cls1, Class_ cls2);
   std::list<Class_> get_class_chain(Class_ cls);
@@ -61,7 +62,6 @@ public:
   ostream& semant_error(Class_ c);
   ostream& semant_error(Symbol filename, tree_node *t);
 };
-
 
 #endif
 
