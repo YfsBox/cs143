@@ -28,6 +28,7 @@ class ClassTable {
 private:
   int semant_errors;
   Class_ curr_class_;
+  Classes classes_;
   void install_basic_classes();
   ostream& error_stream;
   std::map<Symbol, std::list<Symbol>> class_graph_;
@@ -61,6 +62,14 @@ public:
   ostream& semant_error();
   ostream& semant_error(Class_ c);
   ostream& semant_error(Symbol filename, tree_node *t);
+};
+
+class Debug {
+private:
+    std::string msg_;
+public:
+    Debug(const std::string &msg);
+    ~Debug();
 };
 
 #endif

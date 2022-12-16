@@ -19,6 +19,13 @@ typedef SymbolTable<Symbol, Symbol> ObjectEnvTable; // object表
 ObjectEnvTable objectEnv;
 
 ClassTable* classtable = nullptr;
+
+Debug::Debug(const std::string &msg):msg_(msg) {
+    classtable->semant_error(classtable->get_curr_class()) << msg_ << " enter\n";
+}
+Debug::~Debug() {
+    classtable->semant_error(classtable->get_curr_class()) << msg_ << " leave\n";
+}
 //////////////////////////////////////////////////////////////////////
 //
 // Symbols
@@ -91,14 +98,16 @@ static void initialize_constants(void)
 }
 
 static bool type_less_or_equal(Symbol class1, Symbol class2) {
-    class__class *class_class1 = dynamic_cast<class__class*> (classtable->get_class_byname(class1));
-    class__class *class_class2 = dynamic_cast<class__class*> (classtable->get_class_byname(class2));
-
-    Symbol type1 = class_class1->get_name();
-    Symbol type2 = class_class2->get_name();
-    if (type1 == type2) {
+    if (class1 == class2) {
         return true;
     }
+    class__class *class_class1 = dynamic_cast<class__class*> (classtable->get_class_byname(class1));
+    class__class *class_class2 = dynamic_cast<class__class*> (classtable->get_class_byname(class2));
+    if (class_class1 == nullptr || class_class2 == nullptr) {
+        return false;
+    }
+    Symbol type1 = class_class1->get_name();
+    Symbol type2 = class_class2->get_name();
     auto chain = classtable->get_class_chain(classtable->get_class_byname(class1));
     for (auto chain_class : chain) {
         class__class *chain__class_class = dynamic_cast<class__class*> (chain_class);
@@ -253,7 +262,7 @@ void ClassTable::install_methods_and_attrs() {
 }
 
 
-ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr), error_stream(cerr) {
+ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr), classes_(classes),error_stream(cerr) {
     /* Fill this in */
     install_basic_classes();
     class__class *curr_elem;
@@ -301,7 +310,7 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
 }
 
 bool ClassTable::NameTypeValid(Symbol name) {
-    return name != IO && name != Int && name != Bool && name != Str && name != SELF_TYPE;
+    return name != Int && name != Bool && name != Str && name != SELF_TYPE;
 }
 
 void ClassTable::install_basic_classes() {
@@ -415,13 +424,13 @@ void ClassTable::check_and_install() {
     Symbol curr_class_name;
     class__class *curr_class;
     Features curr_features;
-    for (const auto sc : class_name_map_) {
-        curr_class_ = sc.second;
-        curr_class_name = sc.first;
-        curr_class = dynamic_cast<class__class*> (sc.second);
+    for (int i = classes_->first(); classes_->more(i) == TRUE; i = classes_->next(i)) {
+        curr_class_ = classes_->nth(i);
+        curr_class = dynamic_cast<class__class*> (curr_class_);
+        curr_class_name = curr_class->get_name();
         curr_features = curr_class->get_features();
 
-        auto chain = get_class_chain(sc.second); // 获取继承链
+        auto chain = get_class_chain(curr_class_); // 获取继承链
         // 根据继承链,来将所有的attr加入到object_env中,其中需要注意作用域
         Symbol chain_symbol;
         for (auto chain_node : chain) { // 从Object一直到该类自身,这一步仅仅是处理attr的声明,先加入符号表之中
@@ -484,8 +493,7 @@ void ClassTable::check_and_install() {
             Symbol expr_type = method_expr->check_type();
             if (return_type == SELF_TYPE) {
                 expr_type = curr_class->get_name();
-            } else if (class_name_map_.find(return_type) == class_name_map_.end() ||
-                    class_name_map_.find(expr_type) == class_name_map_.end()) { // 找不到这个type
+            } else if (class_name_map_.find(return_type) == class_name_map_.end()) { // 找不到这个type
                 semant_error(curr_class_) << "the method return_type "<< return_type
                 <<"is not defined\n";
             } else if (!type_less_or_equal(return_type, expr_type)) {
@@ -715,14 +723,15 @@ Symbol typcase_class::check_type() {
 }
 
 Symbol block_class::check_type() {
-    auto exprs = body;
-    Expression_class *expr;
+    Expression expr;
     Symbol expr_type;
-    for (int i = exprs->first(); exprs->more(i) == TRUE; i = exprs->next(i)) {
-        expr = exprs->nth(i);
-        expr_type = expr->check_type();
+    {
+        for (int i = body->first(); body->more(i) == TRUE; i = body->next(i)) {
+            expr = body->nth(i);
+            expr_type = expr->check_type();
+        }
+        type = expr_type;
     }
-    type = expr_type;
     return type;
 }
 
@@ -928,7 +937,7 @@ void program_class::semant()
     /* ClassTable constructor may do some semantic analysis */
     classtable = new ClassTable(classes);  // 根据classes的list可以得到一个ClassTable
     /* some semantic analysis code may go here */
-    classtable->show_chains();
+    // classtable->show_chains();
     // classtable->test_find_lc_root();
     classtable->check_and_install();
     if (classtable->errors()) {
