@@ -80,11 +80,13 @@ void dump_with_types(ostream&,int);
 
 #define Formal_EXTRAS                              \
 virtual void dump_with_types(ostream&,int) = 0;    \
-virtual Symbol get_type() = 0;
+virtual Symbol get_type() = 0;                     \
+virtual Symbol get_name() = 0;
 
 #define formal_EXTRAS                           \
 void dump_with_types(ostream&,int);             \
-Symbol get_type() { return type_decl; }
+Symbol get_type() { return type_decl; }         \
+Symbol get_name() { return name; }
 
 #define Case_EXTRAS                             \
 virtual void dump_with_types(ostream& ,int) = 0;\
@@ -111,7 +113,9 @@ void dump_with_types(ostream&,int);
 #define method_EXTRAS \
 bool is_attr()  { return false; }   \
 Symbol get_name() { return name; }  \
-Formals get_formals() { return formals; }
+Formals get_formals() { return formals; } \
+Expression get_expr() { return expr; }    \
+Symbol get_returntype() { return return_type; }
 
 #define attr_EXTRAS \
 bool is_attr() { return true; } \

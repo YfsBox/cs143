@@ -441,6 +441,7 @@ void ClassTable::check_and_install() {
         for (auto attr : curr_attrs) {
             curr_attr = attr;
             Symbol curr_attr_type = curr_attr->get_type();
+            Expression curr_attr_init = curr_attr->get_expr();
             Symbol init_type = curr_attr_init->check_type();
             if (init_type == No_type) {
                 continue;
@@ -448,7 +449,6 @@ void ClassTable::check_and_install() {
             if (curr_attr_type == SELF_TYPE) {
                 curr_attr_type = curr_class->get_name(); // 如果attr的类型是SELF_TYPE
             }
-            Expression curr_attr_init = curr_attr->get_expr();
             // 检查init的类型是否存在
             auto findit = class_name_map_.find(init_type);
             if (findit == class_name_map_.end()) { // 表示attr中init对应的表达式根本不存在
@@ -459,8 +459,39 @@ void ClassTable::check_and_install() {
             }
         }
         // 检查method的类型
+        Formals curr_formals;
         for (auto method : curr_methods) {
-
+            // 进入该method的scope之中
+            objectEnv.enterscope();
+            curr_formals = method->get_formals();
+            // 对其中的formal进行检查
+            Formal curr_formal;
+            for (int i = curr_formals->first(); curr_formals->more(i) == TRUE; i = curr_formals->next(i)) {
+                curr_formal = curr_formals->nth(i);
+                Symbol formal_type = curr_formal->get_type();
+                if (formal_type == SELF_TYPE) { // 是否为self类型
+                    formal_type = curr_class->get_name();
+                } else if (class_name_map_.find(formal_type) == class_name_map_.end()) {  // 检查是否存在这个type,这个分支就是不存在的情况
+                    // 不存在这类型则需要报错
+                    semant_error(curr_class_) << "the method formal " << curr_formal->get_type() << " in method "
+                        << method->get_name() << " is not defined\n";
+                }
+                // 将这个identifier加入到scope中
+                objectEnv.addid(curr_formal->get_name(), new Symbol(formal_type));
+            }
+            Symbol return_type = method->get_returntype();
+            Expression method_expr = method->get_expr();
+            Symbol expr_type = method_expr->check_type();
+            if (return_type == SELF_TYPE) {
+                expr_type = curr_class->get_name();
+            } else if (class_name_map_.find(return_type) == class_name_map_.end() ||
+                    class_name_map_.find(expr_type) == class_name_map_.end()) { // 找不到这个type
+                semant_error(curr_class_) << "the method return_type "<< return_type
+                <<"is not defined\n";
+            } else if (!type_less_or_equal(class_name_map_[return_type], class_name_map_[expr_type])) {
+                semant_error(curr_class_) << "the expr type is not <= return type\n";
+            }
+            objectEnv.exitscope();
         }
         // 离开作用域，弹出
         auto chain_depth = chain.size();
