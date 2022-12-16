@@ -437,8 +437,26 @@ void ClassTable::check_and_install() {
         const std::list<attr_class*>& curr_attrs = attrs_table_[curr_class_name];
         const std::list<method_class*>& curr_methods = methods_table_[curr_class_name];
         // 检查attrs的类型，主要在于检查init对应的表达式是否和已经在符号表中记录的一致
+        attr_class *curr_attr;
         for (auto attr : curr_attrs) {
-
+            curr_attr = attr;
+            Symbol curr_attr_type = curr_attr->get_type();
+            Symbol init_type = curr_attr_init->check_type();
+            if (init_type == No_type) {
+                continue;
+            }
+            if (curr_attr_type == SELF_TYPE) {
+                curr_attr_type = curr_class->get_name(); // 如果attr的类型是SELF_TYPE
+            }
+            Expression curr_attr_init = curr_attr->get_expr();
+            // 检查init的类型是否存在
+            auto findit = class_name_map_.find(init_type);
+            if (findit == class_name_map_.end()) { // 表示attr中init对应的表达式根本不存在
+                semant_error(curr_class_) << "the attr " << curr_attr->get_name() << "'s init type is not defined\n";
+            } else if (!type_less_or_equal(findit->second, class_name_map_[curr_attr_type])) { // 不是 <=的关系
+                semant_error(curr_class_) << "the attr type is " << curr_attr_type << " the init type is " <<
+                    init_type << " not satisfiy <=\n";
+            }
         }
         // 检查method的类型
         for (auto method : curr_methods) {
@@ -678,22 +696,29 @@ Symbol block_class::check_type() {
 }
 
 Symbol let_class::check_type() {
-    objectEnv.enterscope();
-    objectEnv.addid(identifier, new Symbol(type_decl));
     Symbol e1_type = init->check_type();
     Symbol decl_type = type_decl;
-    if (classtable->get_class_byname(type_decl) == nullptr) {
-        classtable->semant_error() << "the decl type "<< type_decl <<" is not defined\n";
+    if (classtable->get_class_byname(type_decl) == nullptr) { // 不存在这个类型的type_decl
+        classtable->semant_error() << "the decl type " << type_decl << " is not defined\n";
+        type = Object;
+        return type;
     }
-    if (type_decl == SELF_TYPE) {
-        decl_type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
+    if (e1_type != No_type) { // 如果有init的
+        if (type_decl == SELF_TYPE) {
+            decl_type = dynamic_cast<class__class *>(classtable->get_curr_class())->get_name();
+        }
+        if (!type_less_or_equal(classtable->get_class_byname(e1_type), classtable->get_class_byname(decl_type))) {
+            classtable->semant_error() << "the init type not <= decl type\n";
+            type = Object;
+            return type;
+        }
     }
-    if (!type_less_or_equal(classtable->get_class_byname(e1_type), classtable->get_class_byname(decl_type))) {
-        classtable->semant_error() << "the init type not <= decl type\n";
-    }
+    objectEnv.enterscope();
+    objectEnv.addid(identifier, new Symbol(type_decl));
     Symbol e2_type = body->check_type();
     objectEnv.exitscope();
-    return Object;
+    type = e2_type;
+    return type;
 }
 
 Symbol plus_class::check_type() {
