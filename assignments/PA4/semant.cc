@@ -21,10 +21,10 @@ ObjectEnvTable objectEnv;
 ClassTable* classtable = nullptr;
 
 Debug::Debug(const std::string &msg):msg_(msg) {
-    classtable->semant_error(classtable->get_curr_class()) << msg_ << " enter\n";
+    classtable->semant_debug(classtable->get_curr_class()) << msg_ << " enter\n";
 }
 Debug::~Debug() {
-    classtable->semant_error(classtable->get_curr_class()) << msg_ << " leave\n";
+    classtable->semant_debug(classtable->get_curr_class()) << msg_ << " leave\n";
 }
 //////////////////////////////////////////////////////////////////////
 //
@@ -555,6 +555,18 @@ ostream& ClassTable::semant_error(Symbol filename, tree_node *t)
 ostream& ClassTable::semant_error()                  
 {                                                 
     semant_errors++;                            
+    return error_stream;
+}
+ostream& ClassTable::semant_debug(Class_ c) {
+    return semant_debug(c->get_filename(),c);
+}
+
+ostream& ClassTable::semant_debug(Symbol filename, tree_node *t) {
+    error_stream << filename << ":" << t->get_line_number() << ": ";
+    return semant_debug();
+}
+
+ostream& ClassTable::semant_debug() {
     return error_stream;
 }
 /*   This is the entry point to the semantic checker.

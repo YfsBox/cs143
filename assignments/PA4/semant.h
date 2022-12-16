@@ -62,6 +62,10 @@ public:
   ostream& semant_error();
   ostream& semant_error(Class_ c);
   ostream& semant_error(Symbol filename, tree_node *t);
+
+  ostream& semant_debug();
+  ostream& semant_debug(Class_ c);
+  ostream& semant_debug(Symbol filename, tree_node *t);
 };
 
 class Debug {
