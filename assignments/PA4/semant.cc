@@ -689,6 +689,8 @@ Symbol static_dispatch_class::check_type() {
 Symbol dispatch_class::check_type() {
     Class_ curr_class = classtable->get_curr_class();
     Symbol expr_type = expr->check_type();
+    // classtable->semant_debug() << "the identifier is " << expr_type << " and the mathod name is "
+       // << name << '\n';
     if (expr_type == SELF_TYPE) {
         expr_type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
     } else if (classtable->get_class_byname(expr_type) == nullptr) { // 根本找不到这个type
@@ -885,7 +887,7 @@ Symbol eq_class::check_type() {
         classtable->semant_error(this) << "The e1 type != e2 type\n";
     }
     type = Bool;
-    return Object;
+    return type;
 }
 
 Symbol leq_class::check_type() {
@@ -949,7 +951,7 @@ Symbol no_expr_class::check_type() {
 
 Symbol object_class::check_type() {
     if (name == self) {
-        type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
+        type = SELF_TYPE;
         return type;
     }
     Symbol *object_type = objectEnv.lookup(name);
