@@ -151,7 +151,6 @@ bool ClassTable::check_loop() {
             }
         }
     }
-    // printf("the cnt is %d, the class name map size is %d\n", cnt, class_name_map_.size());
     return cnt != class_name_map_.size(); // 如果是true就是有环的
 }
 
@@ -256,17 +255,10 @@ void ClassTable::install_methods_and_attrs() {
             }
         }
     }
-    /*for (auto methods_pair : methods_table_) {
-        semant_error() << methods_pair.first << ":\n";
-        for (auto method : methods_pair.second) {
-            semant_error() << method->get_name() << " ";
-        }
-        semant_error() << "\n";
-    }*/
 }
 
 
-ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr), classes_(classes),error_stream(cerr) {
+ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr), error_stream(cerr) {
     /* Fill this in */
     install_basic_classes();
     class__class *curr_elem;
@@ -275,10 +267,13 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
     for (int i = classes->first(); classes->more(i) == TRUE; i = classes->next(i)) {
         // curr_elem = classes->nth(i);
         curr_elem = dynamic_cast<class__class*>(classes->nth(i));  // 获取的是class对应的指针
-        // class_graph_[elem] = {};    // 记录该项因此表示该项已经存在
         curr_name = curr_elem->get_name();
         curr_parent = curr_elem->get_parent();
         auto findit = class_name_map_.find(curr_name);
+        if (curr_name == SELF_TYPE) {
+            semant_error(curr_elem) << "redinition of SELF_TYPE\n";
+            continue;
+        }
         if (findit != class_name_map_.end()) { // 判断是否出现重定义现象
             semant_error(curr_elem) << "class " << curr_name << " redefine\n";
             continue;
@@ -288,23 +283,26 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
             continue;
         }
         InitInClass(curr_elem);
+        valid_classes_.push_back(classes->nth(i));
     }
     auto findmain = class_name_map_.find(Main); // 没有main函数
     if (findmain == class_name_map_.end()) {
         semant_error() << "not have main object\n";
     }
     /* 检查是否有未定义的继承，并且构造继承图 */
-    for (int i = classes->first(); classes->more(i); i = classes->next(i)) {
-        Class_ curr_class = classes->nth(i);
-        curr_elem = dynamic_cast<class__class*>(classes->nth(i));
+    for (auto valid_it = valid_classes_.begin(); valid_it != valid_classes_.end();) {
+        curr_elem = dynamic_cast<class__class*>(*valid_it);
         curr_name = curr_elem->get_name();
         curr_parent = curr_elem->get_parent();
         auto findit = class_name_map_.find(curr_parent);
         if (findit == class_name_map_.end()) { // 表示出现了未定义parent的继承
-            semant_error(curr_class) << "class " << curr_name << " undefined parent class " << curr_parent << '\n';
+            semant_error(*valid_it) << "class " << curr_name << " undefined parent class " << curr_parent << '\n';
+            valid_classes_.erase(valid_it++);
+            continue;
         } else if (curr_parent != Bool && curr_parent != SELF_TYPE && curr_parent != Str && curr_parent != Int) {
             class_graph_[curr_parent].push_back(curr_name);
         }
+        ++valid_it;
     }
     // 检查继承图有没有出现环，通过拓扑排序进行检查即可
     {
@@ -445,8 +443,8 @@ void ClassTable::check_and_install() {
     Symbol curr_class_name;
     class__class *curr_class;
     Features curr_features;
-    for (int i = classes_->first(); classes_->more(i) == TRUE; i = classes_->next(i)) {
-        curr_class_ = classes_->nth(i);
+    for (auto valid_class : valid_classes_) {
+        curr_class_ = valid_class;
         curr_class = dynamic_cast<class__class*> (curr_class_);
         curr_class_name = curr_class->get_name();
         curr_features = curr_class->get_features();
@@ -490,7 +488,6 @@ void ClassTable::check_and_install() {
                 curr_attr_type = curr_class->get_name(); // 如果attr的类型是SELF_TYPE
             }
             // 检查init的类型是否存在
-            // semant_debug() << "the init type is " << init_type << '\n';
             if (init_type == SELF_TYPE) {
                 init_type = curr_class->get_name();
             }
@@ -664,7 +661,7 @@ Symbol branch_class::check_type() {
     Symbol decl_type = type_decl;
     Symbol var_name = name;
     objectEnv.addid(var_name, new Symbol(decl_type));
-    Symbol type = expr->check_type();
+    type = expr->check_type();
     objectEnv.exitscope();
     return type;
 }
@@ -710,15 +707,16 @@ Symbol static_dispatch_class::check_type() {
 Symbol dispatch_class::check_type() {
     Class_ curr_class = classtable->get_curr_class();
     Symbol expr_type = expr->check_type();
+    Symbol expr_type_not_self = expr_type;
     if (expr_type == SELF_TYPE) {
-        expr_type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
-    } else if (classtable->get_class_byname(expr_type) == nullptr) { // 根本找不到这个type
-        classtable->semant_error(this) << "the type of expr " << expr_type << " is not defined\n";
+        expr_type_not_self = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
+    } else if (classtable->get_class_byname(expr_type_not_self) == nullptr) { // 根本找不到这个type
+        classtable->semant_error(this) << "the type of expr " << expr_type_not_self << " is not defined\n";
         type = Object;
         return type;
     }
     // 判断method是否存在
-    method_class *method = classtable->get_method(classtable->get_class_byname(expr_type), name);
+    method_class *method = classtable->get_method(classtable->get_class_byname(expr_type_not_self), name);
     if (method == nullptr) { // 如果这个method不存在的话
         classtable->semant_error(this) << "the method " << name << " is not exsit\n";
         type = Object;
@@ -740,6 +738,8 @@ Symbol dispatch_class::check_type() {
     }
     Symbol return_type = method->get_returntype();
     type = (return_type == SELF_TYPE) ? expr_type : return_type;
+    /*classtable->semant_debug() << "the object id is" << " method name is " << name << " the return type is "
+                                   << return_type << " the expr type is " << expr_type << '\n';*/
     return type;
 }
 
@@ -776,11 +776,12 @@ Symbol typcase_class::check_type() {
     for (int i = cases->first(); cases->more(i) == TRUE; i = cases->next(i)) {
         case_class = cases->nth(i);
         case_symbol = case_class->check_type();
-        auto findit = symbol_sets.find(case_symbol);
+        Symbol case_decl_type = dynamic_cast<branch_class*>(case_class)->get_type_decl();
+        auto findit = symbol_sets.find(case_decl_type);
         if (findit != symbol_sets.end()) {
-            classtable->semant_error(this) << "The brach type is repeat\n";
+            classtable->semant_error(this) << "The brach type " << case_symbol << " is repeat\n";
         } else {
-            symbol_sets.insert(case_symbol);
+            symbol_sets.insert(case_decl_type);
         }
         if (i > 0) {
             last_case_symbol = classtable->find_lastcommon_root(
@@ -826,9 +827,6 @@ Symbol let_class::check_type() {
         return type;
     }
     if (e1_type != No_type) { // 如果有init的
-        if (type_decl == SELF_TYPE) {
-            decl_type = dynamic_cast<class__class *>(classtable->get_curr_class())->get_name();
-        }
         if (!type_less_or_equal(e1_type, decl_type)) {
             classtable->semant_error(this) << "the init type not <= decl type\n";
             type = Object;
@@ -984,6 +982,7 @@ Symbol no_expr_class::check_type() {
 }
 
 Symbol object_class::check_type() {
+    // classtable->semant_debug() << "the object name is " << this->name << '\n';
     if (name == self) {
         type = SELF_TYPE;
         return type;
@@ -1032,8 +1031,6 @@ void program_class::semant()
     /* ClassTable constructor may do some semantic analysis */
     classtable = new ClassTable(classes);  // 根据classes的list可以得到一个ClassTable
     /* some semantic analysis code may go here */
-    // classtable->show_chains();
-    // classtable->test_find_lc_root();
     classtable->check_and_install();
     if (classtable->errors()) {
 	    cerr << "Compilation halted due to static semantic errors." << endl;

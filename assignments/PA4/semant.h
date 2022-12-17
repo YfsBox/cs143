@@ -28,7 +28,7 @@ class ClassTable {
 private:
   int semant_errors;
   Class_ curr_class_;
-  Classes classes_;
+  std::list<Class_> valid_classes_; // 不包含basic class
   void install_basic_classes();
   ostream& error_stream;
   std::map<Symbol, std::list<Symbol>> class_graph_;

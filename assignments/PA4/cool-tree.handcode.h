@@ -93,8 +93,10 @@ virtual void dump_with_types(ostream& ,int) = 0;\
 virtual Symbol check_type() = 0;
 
 #define branch_EXTRAS                                   \
+Symbol type;                                                        \
 void dump_with_types(ostream& ,int);            \
-Symbol check_type();
+Symbol check_type();                                    \
+Symbol get_type_decl() { return type_decl; }
 
 
 #define Expression_EXTRAS                    \
