@@ -115,7 +115,7 @@ static bool type_less_or_equal(Symbol class1, Symbol class2) {
             return true;
         }
     }
-    return true;
+    return false;
 }
 
 bool ClassTable::check_loop() {
@@ -496,7 +496,7 @@ void ClassTable::check_and_install() {
             } else if (class_name_map_.find(return_type) == class_name_map_.end()) { // 找不到这个type
                 semant_error(curr_class_) << "the method return_type "<< return_type
                 <<"is not defined\n";
-            } else if (!type_less_or_equal(return_type, expr_type)) {
+            } else if (!type_less_or_equal(expr_type, return_type)) {
                 semant_error(curr_class_) << "the expr type is not <= return type\n";
             }
             objectEnv.exitscope();
@@ -544,7 +544,11 @@ method_class *ClassTable::get_method(Class_ cls, Symbol name) {
 ostream& ClassTable::semant_error(Class_ c)
 {                                                             
     return semant_error(c->get_filename(),c);
-}    
+}
+
+ostream& ClassTable::semant_error(Expression expr) {
+    return semant_error(curr_class_->get_filename(), expr);
+}
 
 ostream& ClassTable::semant_error(Symbol filename, tree_node *t)
 {
@@ -552,11 +556,11 @@ ostream& ClassTable::semant_error(Symbol filename, tree_node *t)
     return semant_error();
 }
 
-ostream& ClassTable::semant_error()                  
-{                                                 
+ostream& ClassTable::semant_error() {
     semant_errors++;                            
     return error_stream;
 }
+
 ostream& ClassTable::semant_debug(Class_ c) {
     return semant_debug(c->get_filename(),c);
 }
@@ -651,14 +655,14 @@ Symbol dispatch_class::check_type() {
     if (expr_type == SELF_TYPE) {
         expr_type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
     } else if (classtable->get_class_byname(expr_type) == nullptr) { // 根本找不到这个type
-        classtable->semant_error() << "the type of expr " << expr_type << " is not defined\n";
+        classtable->semant_error(this) << "the type of expr " << expr_type << " is not defined\n";
         type = Object;
         return type;
     }
     // 判断method是否存在
     method_class *method = classtable->get_method(curr_class, name);
     if (method == nullptr) { // 如果这个method不存在的话
-        classtable->semant_error() << "the method " << method->get_name() << " is not exsit\n";
+        classtable->semant_error(this) << "the method " << method->get_name() << " is not exsit\n";
         type = Object;
         return type;
     }
@@ -673,7 +677,7 @@ Symbol dispatch_class::check_type() {
         Symbol formal_type = curr_formal->get_type();
 
         if (!type_less_or_equal(curr_expr_type, formal_type)) {
-            classtable->semant_error() << "the formal is " << formal_type <<" but the type " << expr_type << "is error in method"
+            classtable->semant_error(this) << "the formal is " << formal_type <<" but the type " << expr_type << "is error in method"
                                        << method->get_name() << '\n';
         }
         if (actual->more(i + 1) == FALSE) { // 如果是最后一项
@@ -686,7 +690,7 @@ Symbol dispatch_class::check_type() {
 Symbol cond_class::check_type() {
     Symbol pred_type = pred->check_type();
     if (pred_type != Bool) {
-        classtable->semant_error() << "The type of pred is not Bool\n";
+        classtable->semant_error(this) << "The type of pred is not Bool\n";
     }
 
     Symbol then_type = then_exp->check_type();
@@ -701,7 +705,7 @@ Symbol cond_class::check_type() {
 Symbol loop_class::check_type() {
     Symbol e1_type = pred->check_type();
     if (e1_type != Bool) {
-        classtable->semant_error() << "the pred type is not Bool in loop_class\n";
+        classtable->semant_error(this) << "the pred type is not Bool in loop_class\n";
     }
     Symbol e2_type = body->check_type();
     type = Object;
@@ -718,7 +722,7 @@ Symbol typcase_class::check_type() {
         case_symbol = case_class->check_type();
         auto findit = symbol_sets.find(case_symbol);
         if (findit != symbol_sets.end()) {
-            classtable->semant_error() << "The brach type is repeat\n";
+            classtable->semant_error(this) << "The brach type is repeat\n";
         } else {
             symbol_sets.insert(case_symbol);
         }
@@ -751,7 +755,7 @@ Symbol let_class::check_type() {
     Symbol e1_type = init->check_type();
     Symbol decl_type = type_decl;
     if (classtable->get_class_byname(type_decl) == nullptr) { // 不存在这个类型的type_decl
-        classtable->semant_error() << "the decl type " << type_decl << " is not defined\n";
+        classtable->semant_error(this) << "the decl type " << type_decl << " is not defined\n";
         type = Object;
         return type;
     }
@@ -760,7 +764,7 @@ Symbol let_class::check_type() {
             decl_type = dynamic_cast<class__class *>(classtable->get_curr_class())->get_name();
         }
         if (!type_less_or_equal(e1_type, decl_type)) {
-            classtable->semant_error() << "the init type not <= decl type\n";
+            classtable->semant_error(this) << "the init type not <= decl type\n";
             type = Object;
             return type;
         }
@@ -777,7 +781,7 @@ Symbol plus_class::check_type() {
     Symbol e1_type = e1->check_type();
     Symbol e2_type = e2->check_type();
     if (e1_type != Int || e2_type != Int) {
-        classtable->semant_error() << "the e1 or e2 is not Int type in a plus_class\n";
+        classtable->semant_error(this) << "the e1 or e2 is not Int type in a plus_class\n";
     }
     type = Int;
     return type;
@@ -787,7 +791,7 @@ Symbol sub_class::check_type() {
     Symbol e1_type = e1->check_type();
     Symbol e2_type = e2->check_type();
     if (e1_type != Int || e2_type != Int) {
-        classtable->semant_error() << "the e1 or e2 is not Int type in a sub_class\n";
+        classtable->semant_error(this) << "the e1 or e2 is not Int type in a sub_class\n";
     }
     type = Int;
     return type;
@@ -797,7 +801,7 @@ Symbol mul_class::check_type() {
     Symbol e1_type = e1->check_type();
     Symbol e2_type = e2->check_type();
     if (e1_type != Int || e2_type != Int) {
-        classtable->semant_error() << "the e1 or e2 is not Int type in a mul_class\n";
+        classtable->semant_error(this) << "the e1 or e2 is not Int type in a mul_class\n";
     }
     type = Int;
     return type;
@@ -807,7 +811,7 @@ Symbol divide_class::check_type() {
     Symbol e1_type = e1->check_type();
     Symbol e2_type = e2->check_type();
     if (e1_type != Int || e2_type != Int) {
-        classtable->semant_error() << "the e1 or e2 is not Int type in a divide_class\n";
+        classtable->semant_error(this) << "the e1 or e2 is not Int type in a divide_class\n";
     }
     type = Int;
     return type;
@@ -816,7 +820,7 @@ Symbol divide_class::check_type() {
 Symbol neg_class::check_type() {
     Symbol expr_type = e1->check_type();
     if (expr_type != Int) {
-        classtable->semant_error() << "The neg_class is not int\n";
+        classtable->semant_error(this) << "The neg_class is not int\n";
     }
     type = Int;
     return type;
@@ -826,7 +830,7 @@ Symbol lt_class::check_type() {
     Symbol e1_type = e1->check_type();
     Symbol e2_type = e2->check_type();
     if (e1_type != Int || e2_type != Int) {
-        classtable->semant_error() << "The e1 or e2 is not Int type in lt class\n";
+        classtable->semant_error(this) << "The e1 or e2 is not Int type in lt class\n";
     }
     type = Bool;
     return type;
@@ -837,13 +841,13 @@ Symbol eq_class::check_type() {
     Symbol e2_type = e2->check_type();
 
     if (e1_type != Int && e1_type != Bool && e1_type != Str) {
-        classtable->semant_error() << "The e1 type error(not Int, Bool, Str) in eq_class\n";
+        classtable->semant_error(this) << "The e1 type error(not Int, Bool, Str) in eq_class\n";
     }
     if (e2_type != Int && e2_type != Bool && e2_type != Str) {
-        classtable->semant_error() << "The e2 type error(not Int, Bool, Str) in eq_class\n";
+        classtable->semant_error(this) << "The e2 type error(not Int, Bool, Str) in eq_class\n";
     }
     if (e2_type != e1_type) {
-        classtable->semant_error() << "The e1 type != e2 type\n";
+        classtable->semant_error(this) << "The e1 type != e2 type\n";
     }
     type = Bool;
     return Object;
@@ -853,7 +857,7 @@ Symbol leq_class::check_type() {
     Symbol e1_type = e1->check_type();
     Symbol e2_type = e2->check_type();
     if (e1_type != Int || e2_type != Int) {
-        classtable->semant_error() << "The e1 or e2 is not Int type in leq class\n";
+        classtable->semant_error(this) << "The e1 or e2 is not Int type in leq class\n";
     }
     type = Bool;
     return type;
@@ -862,7 +866,7 @@ Symbol leq_class::check_type() {
 Symbol comp_class::check_type() {
     Symbol e1_type = e1->check_type();
     if (e1_type != Bool) {
-        classtable->semant_error() << "the e1 is not Bool in comp_class\n";
+        classtable->semant_error(this) << "the e1 is not Bool in comp_class\n";
     }
     type = Bool;
     return type;
@@ -886,10 +890,10 @@ Symbol string_const_class::check_type() {
 Symbol new__class::check_type() {
     Symbol tp_name = type_name;
     if (tp_name == SELF_TYPE) {
-        classtable->semant_error() << "Can't new a SELF_TYPE object\n";
+        classtable->semant_error(this) << "Can't new a SELF_TYPE object\n";
         type = Object;
     } else if (classtable->get_class_byname(tp_name) == nullptr) {
-        classtable->semant_error() << "The Object type not declare\n";
+        classtable->semant_error(this) << "The Object type not declare\n";
         type = Object;
     } else {
         type = tp_name;
@@ -909,9 +913,13 @@ Symbol no_expr_class::check_type() {
 }
 
 Symbol object_class::check_type() {
+    if (name == self) {
+        type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
+        return type;
+    }
     Symbol *object_type = objectEnv.lookup(name);
     if (object_type == nullptr) {
-        classtable->semant_error() << "the object type "<< name <<" is not declare\n";
+        classtable->semant_error(this) << "the object type "<< name <<" is not declare\n";
         type = Object;
         return type;
     }
@@ -922,13 +930,18 @@ Symbol object_class::check_type() {
 Symbol assign_class::check_type() {
     Symbol *id_type = objectEnv.lookup(name); // 这个变量是之前已经声明过的变量
     Symbol expr_type = expr->check_type();
+    // classtable->semant_debug() << "the id type : " << *id_type << " the expr type is " << expr_type << '\n';
     if (id_type == nullptr) {
-        classtable->semant_error() << name <<" the name of object is not defined\n";
+        classtable->semant_error(this)
+                << name <<" the name of object is not defined\n";
         type = expr_type;
         return type;
     }
-    if (!type_less_or_equal(*id_type, expr_type)) {
-        classtable->semant_error() << "the type of expr: " << expr_type << "not <= the type of id: " << id_type << "\n";
+    if (!type_less_or_equal(expr_type, *id_type)) {
+        classtable->semant_error(this)
+                << "the type of expr: " << expr_type << "not <= the type of id: " << *id_type << "\n";
+        type = Object;
+        return type;
     }
     type = expr_type;
     return type;
