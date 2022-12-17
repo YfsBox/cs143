@@ -68,8 +68,8 @@ Features get_features() const { return features; }
 
 #define Feature_EXTRAS                                        \
 virtual void dump_with_types(ostream&,int) = 0;               \
-virtual bool is_attr() = 0;
-
+virtual bool is_attr() = 0;                                   \
+virtual Symbol get_name() = 0;
 
 #define Feature_SHARED_EXTRAS                                       \
 void dump_with_types(ostream&,int);    
@@ -117,11 +117,12 @@ Formals get_formals() { return formals; } \
 Expression get_expr() { return expr; }    \
 Symbol get_returntype() { return return_type; }
 
+
 #define attr_EXTRAS \
 bool is_attr() { return true; } \
 Symbol get_name() { return name;} \
 Symbol get_type() { return type_decl; } \
-Expression get_expr() { return init; }
+Expression get_expr() { return init; }  \
 
 #define assign_EXTRAS \
 Symbol check_type();

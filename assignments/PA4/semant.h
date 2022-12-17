@@ -38,8 +38,11 @@ private:
 
   bool check_loop();
   void InitInClass(class__class *cls) {
-      class_graph_[cls->get_name()] = {};
-      class_name_map_[cls->get_name()] = cls;
+      Symbol name = cls->get_name();
+      class_graph_[name] = {};
+      methods_table_[name] = {};
+      attrs_table_[name] = {};
+      class_name_map_[name] = cls;
   }
   bool NameTypeValid(Symbol name);
   bool check_method_name(Symbol cls, method_class *feature);
