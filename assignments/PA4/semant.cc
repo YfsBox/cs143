@@ -101,6 +101,10 @@ static bool type_less_or_equal(Symbol class1, Symbol class2) {
     if (class1 == class2) {
         return true;
     }
+    class1 = (class1 == SELF_TYPE) ?
+            dynamic_cast<class__class*>(classtable->get_curr_class())->get_name() : class1;
+    class2 = (class2 == SELF_TYPE) ?
+            dynamic_cast<class__class*>(classtable->get_curr_class())->get_name() : class2;
     class__class *class_class1 = dynamic_cast<class__class*> (classtable->get_class_byname(class1));
     class__class *class_class2 = dynamic_cast<class__class*> (classtable->get_class_byname(class2));
     if (class_class1 == nullptr || class_class2 == nullptr) {
@@ -486,6 +490,10 @@ void ClassTable::check_and_install() {
                 curr_attr_type = curr_class->get_name(); // 如果attr的类型是SELF_TYPE
             }
             // 检查init的类型是否存在
+            // semant_debug() << "the init type is " << init_type << '\n';
+            if (init_type == SELF_TYPE) {
+                init_type = curr_class->get_name();
+            }
             auto findit = class_name_map_.find(init_type);
             if (findit == class_name_map_.end()) { // 表示attr中init对应的表达式根本不存在
                 semant_error(curr_class_) << "the attr " << curr_attr->get_name() << "'s init type is not defined\n";
@@ -502,9 +510,18 @@ void ClassTable::check_and_install() {
             curr_formals = method->get_formals();
             // 对其中的formal进行检查
             Formal curr_formal;
+            std::set<Symbol> formals_set;
             for (int i = curr_formals->first(); curr_formals->more(i) == TRUE; i = curr_formals->next(i)) {
                 curr_formal = curr_formals->nth(i);
                 Symbol formal_type = curr_formal->get_type();
+                Symbol formal_name = curr_formal->get_name();
+                if (formal_name == self) {
+                    semant_error(curr_class) << "the formal name can not be self\n";
+                }
+                if (formals_set.count(formal_name)) {  // 判断是否有参数重名
+                    semant_error(curr_class) << "the formal name " << formal_name
+                        << " in method " << method->get_name() << " is duplicate\n";
+                }
                 if (formal_type == SELF_TYPE) { // 是否为self类型
                     formal_type = curr_class->get_name();
                 } else if (class_name_map_.find(formal_type) == class_name_map_.end()) {  // 检查是否存在这个type,这个分支就是不存在的情况
@@ -513,18 +530,23 @@ void ClassTable::check_and_install() {
                         << method->get_name() << " is not defined\n";
                 }
                 // 将这个identifier加入到scope中
+                formals_set.insert(formal_name);
                 objectEnv.addid(curr_formal->get_name(), new Symbol(formal_type));
             }
             Symbol return_type = method->get_returntype();
             Expression method_expr = method->get_expr();
             Symbol expr_type = method_expr->check_type();
             if (return_type == SELF_TYPE) {
+                return_type = curr_class->get_name();
+            }
+            if (expr_type == SELF_TYPE) {
                 expr_type = curr_class->get_name();
-            } else if (class_name_map_.find(return_type) == class_name_map_.end()) { // 找不到这个type
-                semant_error(curr_class_) << "the method return_type "<< return_type
+            }
+            if (class_name_map_.find(return_type) == class_name_map_.end()) { // 找不到这个type
+                semant_error(method) << "the method return_type "<< return_type
                 <<"is not defined\n";
             } else if (!type_less_or_equal(expr_type, return_type)) {
-                semant_error(curr_class_) << "the expr type is not <= return type\n";
+                semant_error(method) << "the expr type " << expr_type << " is not <= return type " << return_type << "\n";
             }
             objectEnv.exitscope();
         }
@@ -649,48 +671,45 @@ Symbol branch_class::check_type() {
 
 Symbol static_dispatch_class::check_type() {
     Expressions exprs = actual;
-    Expression expr0 = exprs->nth(0);
+    Expression expr0 = expr;
     // 检查T和expr0的关系
     Symbol expr0_type = expr0->check_type();
     Class_ curr_class = classtable->get_curr_class();
     // 然后检查type_name是否存在
     if (classtable->get_class_byname(type_name) == nullptr) {
-        classtable->semant_error() << "the type_name "<< type_name <<" in static dispatch is not exsit\n";
+        classtable->semant_error(this) << "the type_name "<< type_name <<" in static dispatch is not exsit\n";
     } else if (!type_less_or_equal(expr0_type, type_name)) { // 判断是否符合T0 <= T的
-        classtable->semant_error() << "the expr0 "<< expr0_type <<" is not <= type_name in static_dispatch_class\n";
+        classtable->semant_error(this) << "the expr0 "<< expr0_type <<" is not <= type_name " << type_name << " in static_dispatch_class\n";
     }
     // 或者这个method的相关信息
     method_class *method = classtable->get_method(classtable->get_class_byname(expr0_type), name);
     if (method == nullptr) { // 如果都没有这个method，下面的验证就没法进行了,因此需要返回
-        classtable->semant_error() << "the method"<< name <<"is not exsit in static_dispatch_class\n";
+        classtable->semant_error(this) << "the method"<< name <<"is not exsit in static_dispatch_class\n";
         type = Object;
         return type;
     }
 
     Formals method_formals = method->get_formals();
     formal_class *curr_formal;
-    for (int i = exprs->first() + 1; exprs->more(i) == TRUE; i = exprs->next(i)) {
+    for (int i = exprs->first(); exprs->more(i) == TRUE; i = exprs->next(i)) {
         // 对每个formal进行检查,并结合classtable中所记录的method进行比对
-        Expression expr = exprs->nth(i);
-        Symbol expr_type = expr->check_type();
-        curr_formal = dynamic_cast<formal_class*> (method_formals->nth(i - 1));
+        Expression curr_expr = exprs->nth(i);
+        Symbol expr_type = curr_expr->check_type();
+        curr_formal = dynamic_cast<formal_class*> (method_formals->nth(i));
         Symbol formal_type = curr_formal->get_type();
         if (!type_less_or_equal(expr_type, formal_type)) {
-            classtable->semant_error() << "the formal is " << formal_type <<" but the type " << expr_type << "is error in method"
+            classtable->semant_error(this) << "the formal is " << formal_type <<" but the type " << expr_type << " is error in method"
                     << method->get_name() << '\n';
         }
-        if (exprs->more(i + 1) == FALSE) { // 如果是最后一项
-            type = (formal_type == SELF_TYPE) ? expr0_type : formal_type;
-        }
     }
+    Symbol return_type = method->get_returntype();
+    type = (return_type == SELF_TYPE) ? expr0_type : return_type;
     return type;
 }
 
 Symbol dispatch_class::check_type() {
     Class_ curr_class = classtable->get_curr_class();
     Symbol expr_type = expr->check_type();
-    // classtable->semant_debug() << "the identifier is " << expr_type << " and the mathod name is "
-       // << name << '\n';
     if (expr_type == SELF_TYPE) {
         expr_type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
     } else if (classtable->get_class_byname(expr_type) == nullptr) { // 根本找不到这个type
@@ -715,7 +734,7 @@ Symbol dispatch_class::check_type() {
         Symbol formal_type = curr_formal->get_type();
 
         if (!type_less_or_equal(curr_expr_type, formal_type)) {
-            classtable->semant_error(this) << "the formal is " << formal_type <<" but the type " << expr_type << "is error in method"
+            classtable->semant_error(this) << "the formal is " << formal_type <<" but the type " << curr_expr_type << " is error in method "
                                        << method->get_name() << '\n';
         }
     }
@@ -791,7 +810,17 @@ Symbol block_class::check_type() {
 Symbol let_class::check_type() {
     Symbol e1_type = init->check_type();
     Symbol decl_type = type_decl;
-    if (classtable->get_class_byname(type_decl) == nullptr) { // 不存在这个类型的type_decl
+    // classtable->semant_error() << "the decl type is " << decl_type << " and identifier is " <<
+        // identifier << '\n';
+    if (identifier == self) {
+        classtable->semant_error(this) << "the identifier can not be self in let \n";
+        type = Object;
+        return type;
+    }
+    if (decl_type == SELF_TYPE) {
+        decl_type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
+    }
+    if (classtable->get_class_byname(decl_type) == nullptr) { // 不存在这个类型的type_decl
         classtable->semant_error(this) << "the decl type " << type_decl << " is not defined\n";
         type = Object;
         return type;
@@ -876,15 +905,19 @@ Symbol lt_class::check_type() {
 Symbol eq_class::check_type() {
     Symbol e1_type = e1->check_type();
     Symbol e2_type = e2->check_type();
-
-    if (e1_type != Int && e1_type != Bool && e1_type != Str) {
-        classtable->semant_error(this) << "The e1 type error(not Int, Bool, Str) in eq_class\n";
+    if (e1_type == SELF_TYPE) {
+        e1_type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
     }
-    if (e2_type != Int && e2_type != Bool && e2_type != Str) {
-        classtable->semant_error(this) << "The e2 type error(not Int, Bool, Str) in eq_class\n";
+    if (e2_type == SELF_TYPE) {
+        e2_type = dynamic_cast<class__class*>(classtable->get_curr_class())->get_name();
     }
-    if (e2_type != e1_type) {
-        classtable->semant_error(this) << "The e1 type != e2 type\n";
+    if (e1_type != e2_type) {
+        if (e1_type == Int || e1_type == Bool || e1_type == Str) {
+            classtable->semant_error(this) << "The e1 type error" << e1_type << "in eq_class\n";
+        }
+        if (e2_type == Int || e2_type == Bool || e2_type == Str) {
+            classtable->semant_error(this) << "The e2 type error"<<  e2_type << "in eq_class\n";
+        }
     }
     type = Bool;
     return type;
@@ -927,9 +960,10 @@ Symbol string_const_class::check_type() {
 Symbol new__class::check_type() {
     Symbol tp_name = type_name;
     if (tp_name == SELF_TYPE) {
-        classtable->semant_error(this) << "Can't new a SELF_TYPE object\n";
-        type = Object;
-    } else if (classtable->get_class_byname(tp_name) == nullptr) {
+        type = SELF_TYPE;
+        return type;
+    }
+    if (classtable->get_class_byname(tp_name) == nullptr) {
         classtable->semant_error(this) << "The Object type not declare\n";
         type = Object;
     } else {
