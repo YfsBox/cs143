@@ -21,10 +21,10 @@ ObjectEnvTable objectEnv;
 ClassTable* classtable = nullptr;
 
 Debug::Debug(const std::string &msg):msg_(msg) {
-    classtable->semant_debug(classtable->get_curr_class()) << msg_ << " enter\n";
+    classtable->semant_debug() << msg_ << " enter\n";
 }
 Debug::~Debug() {
-    classtable->semant_debug(classtable->get_curr_class()) << msg_ << " leave\n";
+    classtable->semant_debug() << msg_ << " leave\n";
 }
 //////////////////////////////////////////////////////////////////////
 //
@@ -279,8 +279,8 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
             semant_error(curr_elem) << "class " << curr_name << " redefine\n";
             continue;
         }
-        if (!NameTypeValid(curr_parent)) {
-            semant_error(curr_elem) << "class " << curr_name << " parent class not valid\n";
+        if (curr_parent == Bool || curr_parent == SELF_TYPE || curr_parent == Str || curr_parent == Int) {
+            semant_error(curr_elem) << "class " << curr_name << " parent class " << curr_parent << " not valid\n";
             continue;
         }
         InitInClass(curr_elem);
@@ -290,23 +290,29 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
         semant_error() << "not have main object\n";
     }
     /* 检查是否有未定义的继承，并且构造继承图 */
-    for (int i = classes->first(); classes->more(i) == TRUE; i = classes->next(i)) {
+    // semant_debug() << "the classes len is " << classes->len() << '\n';
+    for (int i = classes->first(); classes->more(i); i = classes->next(i)) {
+        // semant_debug() << "i is " << i << '\n';
+        Class_ curr_class = classes->nth(i);
         curr_elem = dynamic_cast<class__class*>(classes->nth(i));
         curr_name = curr_elem->get_name();
+        // semant_debug() << "the curr_name is " << curr_name << " the parent is " << curr_parent << '\n';
         curr_parent = curr_elem->get_parent();
         auto findit = class_name_map_.find(curr_parent);
-        if (findit == class_name_map_.end()) { // 表示出现了未定义的继承
-            semant_error(curr_elem) << "class " << curr_name << " undefined parent class\n";
-            continue;
+        if (findit == class_name_map_.end()) { // 表示出现了未定义parent的继承
+            semant_error(curr_class) << "class " << curr_name << " undefined parent class " << curr_parent << '\n';
+        } else if (curr_parent != Bool && curr_parent != SELF_TYPE && curr_parent != Str && curr_parent != Int) {
+            class_graph_[curr_parent].push_back(curr_name);
         }
-        class_graph_[curr_parent].push_back(curr_name);
     }
     // 检查继承图有没有出现环，通过拓扑排序进行检查即可
-    bool have_loop = check_loop();
-    if (have_loop) {
-        semant_error() << "ring appears in an inheritance relationship\n";
+    {
+        bool have_loop = check_loop();
+        if (have_loop) {
+            semant_error() << "ring appears in an inheritance relationship\n";
+        }
+        install_methods_and_attrs();
     }
-    install_methods_and_attrs();
 }
 
 bool ClassTable::NameTypeValid(Symbol name) {
@@ -431,6 +437,7 @@ void ClassTable::check_and_install() {
         curr_features = curr_class->get_features();
 
         auto chain = get_class_chain(curr_class_); // 获取继承链
+        std::set<Symbol> attr_set;
         // 根据继承链,来将所有的attr加入到object_env中,其中需要注意作用域
         Symbol chain_symbol;
         for (auto chain_node : chain) { // 从Object一直到该类自身,这一步仅仅是处理attr的声明,先加入符号表之中
@@ -439,6 +446,15 @@ void ClassTable::check_and_install() {
             const std::list<attr_class*>& chain_attrs = attrs_table_[chain_symbol];
             objectEnv.enterscope();
             for (auto attr : chain_attrs) {
+                if (attr->get_name() == self) {
+                    semant_error(attr) << "attr is self\n";
+                    continue;
+                }
+                if (attr_set.count(attr->get_name())) {
+                    semant_error(attr) << "attr is redined\n";
+                    continue;
+                }
+                attr_set.insert(attr->get_name());
                 objectEnv.addid(attr->get_name(), new Symbol(attr->get_type()));
             }
         }
@@ -452,7 +468,7 @@ void ClassTable::check_and_install() {
             Symbol curr_attr_type = curr_attr->get_type();
             Expression curr_attr_init = curr_attr->get_expr();
             Symbol init_type = curr_attr_init->check_type();
-            if (init_type == No_type) {
+            if (init_type == No_type || curr_attr->get_name() == self) {
                 continue;
             }
             if (curr_attr_type == SELF_TYPE) {
@@ -550,6 +566,10 @@ ostream& ClassTable::semant_error(Expression expr) {
     return semant_error(curr_class_->get_filename(), expr);
 }
 
+ostream& ClassTable::semant_error(Feature feature) {
+    return semant_error(curr_class_->get_filename(), feature);
+}
+
 ostream& ClassTable::semant_error(Symbol filename, tree_node *t)
 {
     error_stream << filename << ":" << t->get_line_number() << ": ";
@@ -571,6 +591,7 @@ ostream& ClassTable::semant_debug(Symbol filename, tree_node *t) {
 }
 
 ostream& ClassTable::semant_debug() {
+    error_stream << "[debug]";
     return error_stream;
 }
 /*   This is the entry point to the semantic checker.
