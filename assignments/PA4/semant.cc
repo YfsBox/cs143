@@ -221,7 +221,7 @@ Symbol ClassTable::find_lastcommon_root(Class_ cls1, Class_ cls2) {
     return dynamic_cast<class__class*> (*chain_list1_it)->get_name();
 }
 
-void ClassTable::install_methods_and_attrs() {
+void ClassTable::install_methods_and_attrs() { // 填充methods_table和attrs_table_中的内容
     class__class *curr_class;
     Features curr_features;
     for (auto cls_pair : class_name_map_) {
@@ -300,13 +300,10 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
         ++valid_it;
     }
     // 检查继承图有没有出现环，通过拓扑排序进行检查即可
-    {
-        bool have_loop = check_loop();
-        if (have_loop) {
-            semant_error() << "ring appears in an inheritance relationship\n";
-        }
-        install_methods_and_attrs();
+    if (check_loop()) {
+        semant_error() << "ring appears in an inheritance relationship\n";
     }
+    install_methods_and_attrs();
 }
 
 bool ClassTable::check_main(Classes classes) {
@@ -463,7 +460,7 @@ void ClassTable::install_basic_classes() {
             if (feature->is_attr()) {
                 attrs_table_[curr_class_class->get_name()].push_back(dynamic_cast<attr_class*>(feature));
             } else {
-                methods_table_[curr_class_class->get_name()].push_back(dynamic_cast<method_class*>(feature));
+                methods_table_[curr_class_class->get_name()].push_back(dynamic_cast<method_class*> (feature));
             }
         }
     }
@@ -472,6 +469,46 @@ void ClassTable::install_basic_classes() {
 
 Class_ ClassTable::get_curr_class() const {
     return curr_class_;
+}
+
+bool ClassTable::check_override(Class_ cls, const std::list<Class_> &chain, method_class *meth) {
+    auto chain_rbegin = chain.rbegin();
+    bool check_ok = true;
+    chain_rbegin++; // 越过自己
+    Formals meth_formals = meth->get_formals();
+    for (;chain_rbegin != chain.rend(); chain_rbegin++) { // 检查是否有该meth
+        class__class *curr_class = dynamic_cast<class__class*>(*chain_rbegin);
+        const std::list<method_class*> &curr_methods = methods_table_[curr_class->get_name()];
+        for (auto method : curr_methods) {
+            if (method->get_name() == meth->get_name()) {
+                // 比对返回值，formal数量以及type
+                if (method->get_returntype() != meth->get_returntype()) {
+                    semant_error(meth) << "the override method "
+                        << meth->get_name() << " not have same return type\n";
+                    check_ok = false;
+                    break;
+                }
+                Formals curr_formals = method->get_formals();
+                if (curr_formals->len() != meth_formals->len()) {
+                    semant_error(meth) << "the override method " << meth->get_name()
+                        << " not have same num of params\n";
+                    check_ok = false;
+                    break;
+                }
+                for (int i = curr_formals->first(); curr_formals->more(i); i = curr_formals->next(i)) {
+                    Formal curr_formal = curr_formals->nth(i);
+                    Formal meth_formal = meth_formals->nth(i);
+                    if (curr_formal->get_type() != meth_formal->get_type()) {
+                        semant_error(meth) << "the override method " << meth->get_name()
+                            << " have different type of para\n";
+                        check_ok = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    return check_ok;
 }
 
 void ClassTable::check_and_install() {
@@ -528,12 +565,16 @@ void ClassTable::check_and_install() {
                     init_type << " not satisfiy <=\n";
             }
         }
-        // 检查method的类型,要区分是否是override的情况
+        // 检查method的类型
         Formals curr_formals;
         for (auto method : curr_methods) {
             // 进入该method的scope之中
             objectEnv.enterscope();
             curr_formals = method->get_formals();
+            // 检查override的情况
+            if (!check_override(valid_class, chain, method)) {
+                continue;
+            }
             // 对其中的formal进行检查
             Formal curr_formal;
             std::set<Symbol> formals_set;

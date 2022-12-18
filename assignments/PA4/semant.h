@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <iostream>
+#include <algorithm>
 #include <map>
 #include <vector>
 #include <list>
@@ -25,6 +26,8 @@ typedef ClassTable *ClassTableP;
 // 看来还需要为所添加的类建立一个数据结构，用来判断继承图中的环，以及未定义类的问题。
 
 class ClassTable {
+public:
+    typedef std::pair<method_class*, Class_> override_pair;
 private:
   int semant_errors;
   Class_ curr_class_;
@@ -46,6 +49,7 @@ private:
   }
   bool check_method_name(Symbol cls, method_class *feature);
   bool check_attr_name(Symbol cls, attr_class *feature);
+  bool check_override(Class_ cls, const std::list<Class_>& chain,method_class *meth);
   bool check_main(Classes classes);
   void install_methods_and_attrs();
 
