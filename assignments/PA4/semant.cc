@@ -101,10 +101,11 @@ static bool type_less_or_equal(Symbol class1, Symbol class2) {
     if (class1 == class2) {
         return true;
     }
+    if (class1 != SELF_TYPE && class2 == SELF_TYPE) {
+        return false;
+    }
     class1 = (class1 == SELF_TYPE) ?
             dynamic_cast<class__class*>(classtable->get_curr_class())->get_name() : class1;
-    class2 = (class2 == SELF_TYPE) ?
-            dynamic_cast<class__class*>(classtable->get_curr_class())->get_name() : class2;
     class__class *class_class1 = dynamic_cast<class__class*> (classtable->get_class_byname(class1));
     class__class *class_class2 = dynamic_cast<class__class*> (classtable->get_class_byname(class2));
     if (class_class1 == nullptr || class_class2 == nullptr) {
@@ -562,9 +563,7 @@ void ClassTable::check_and_install() {
             Symbol return_type = method->get_returntype();
             Expression method_expr = method->get_expr();
             Symbol expr_type = method_expr->check_type();
-            return_type = (return_type == SELF_TYPE) ? curr_class->get_name() : return_type;
-            expr_type = (expr_type == SELF_TYPE) ? curr_class->get_name() : expr_type;
-            if (class_name_map_.find(return_type) == class_name_map_.end()) { // 找不到这个type
+            if (return_type != SELF_TYPE && class_name_map_.find(return_type) == class_name_map_.end()) { // 找不到这个type
                 semant_error(method) << "the method return_type "<< return_type
                 <<"is not defined\n";
             } else if (!type_less_or_equal(expr_type, return_type)) {
@@ -687,14 +686,12 @@ Symbol static_dispatch_class::check_type() {
         classtable->semant_error(this) << "the expr0 "<< expr0_type <<" is not <= type_name " << type_name << " in static_dispatch_class\n";
     }
     // 或者这个method的相关信息
-    // classtable->semant_debug(curr_class) << "the expr0 type not self is " << expr0_type_not_self << '\n';
     method_class *method = classtable->get_method(classtable->get_class_byname(type_name), name);
     if (method == nullptr) { // 如果都没有这个method，下面的验证就没法进行了,因此需要返回
         classtable->semant_error(this) << "the method "<< name <<" is not exsit in static_dispatch_class\n";
         type = Object;
         return type;
     }
-
     Formals method_formals = method->get_formals();
     formal_class *curr_formal;
     for (int i = exprs->first(); exprs->more(i) && method_formals->more(i); i = exprs->next(i)) {
@@ -755,6 +752,11 @@ Symbol cond_class::check_type() {
     }
     Symbol then_type = then_exp->check_type();
     Symbol else_type = else_exp->check_type();
+    // classtable->semant_debug() << " then type is " << then_type << '\n';
+    then_type = (then_type == SELF_TYPE) ?
+            dynamic_cast<class__class*> (classtable->get_curr_class())->get_name() : then_type;
+    else_type = (then_type == SELF_TYPE) ?
+            dynamic_cast<class__class*> (classtable->get_curr_class())->get_name() : else_type;
     Class_ then_class = classtable->get_class_byname(then_type);
     Class_ else_class = classtable->get_class_byname(else_type);
 
