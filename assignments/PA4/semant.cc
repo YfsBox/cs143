@@ -274,6 +274,9 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
             semant_error(curr_elem) << "redinition of SELF_TYPE\n";
             continue;
         }
+        if (curr_name == Main) {  // 对于Main函数来说集中到后来进行check
+            continue;
+        }
         if (findit != class_name_map_.end()) { // 判断是否出现重定义现象
             semant_error(curr_elem) << "class " << curr_name << " redefine\n";
             continue;
@@ -285,10 +288,7 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
         InitInClass(curr_elem);
         valid_classes_.push_back(classes->nth(i));
     }
-    auto findmain = class_name_map_.find(Main); // 没有main函数
-    if (findmain == class_name_map_.end()) {
-        semant_error() << "not have main object\n";
-    }
+    check_main(classes);
     /* 检查是否有未定义的继承，并且构造继承图 */
     for (auto valid_it = valid_classes_.begin(); valid_it != valid_classes_.end();) {
         curr_elem = dynamic_cast<class__class*>(*valid_it);
@@ -314,8 +314,46 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , curr_class_(nullptr
     }
 }
 
-bool ClassTable::NameTypeValid(Symbol name) {
-    return name != Int && name != Bool && name != Str && name != SELF_TYPE;
+bool ClassTable::check_main(Classes classes) {
+    // 检查main的数量,Main中是否含有main函数，继承关系是否有问题
+    bool have_error = false;
+    int main_cnt = 0;
+    Class_ curr_class;
+    for (int i = classes->first(); classes->more(i) == TRUE; i = classes->next(i)) {
+        curr_class = classes->nth(i);
+        class__class *curr_cclass = dynamic_cast<class__class*> (curr_class);
+        if (curr_cclass->get_name() != Main) {
+            continue;
+        }
+        main_cnt ++;
+        if (main_cnt > 1) {  // 不做过多的处理了，这里只统计数量了
+            continue;
+        }
+        Features curr_features = curr_cclass->get_features();
+        // 检查其中是否有main函数
+        bool have_main = false;
+        for (int i = curr_features->first(); curr_features->more(i) == TRUE; i = curr_features->next(i)) {
+            Feature curr_feature = curr_features->nth(i);
+            if (!curr_feature->is_attr() && curr_feature->get_name() == main_meth) {
+                have_main = true;
+                break;
+            }
+        }
+        if (!have_main) {
+            semant_error(curr_class) << "the Main Object not have a main method\n";
+        } else { // 认定为合法的Main
+            InitInClass(curr_cclass);
+            valid_classes_.push_back(curr_class);
+        }
+    }
+    if (main_cnt == 0) {
+        semant_error() << "Class Main is not defined.\n";
+        have_error = true;
+    } else if (main_cnt > 1) {
+        semant_error() << "define Main Object more than one\n";
+        have_error = true;
+    }
+    return have_error;
 }
 
 void ClassTable::install_basic_classes() {
@@ -521,6 +559,7 @@ void ClassTable::check_and_install() {
                 }
                 if (formal_type == SELF_TYPE) { // 是否为self类型
                     formal_type = curr_class->get_name();
+                    semant_error(curr_class_) << "the formal: " << formal_name << ", type is SELF_TYPE\n";
                 } else if (class_name_map_.find(formal_type) == class_name_map_.end()) {  // 检查是否存在这个type,这个分支就是不存在的情况
                     // 不存在这类型则需要报错
                     semant_error(curr_class_) << "the method formal " << curr_formal->get_type() << " in method "

@@ -44,9 +44,9 @@ private:
       attrs_table_[name] = {};
       class_name_map_[name] = cls;
   }
-  bool NameTypeValid(Symbol name);
   bool check_method_name(Symbol cls, method_class *feature);
   bool check_attr_name(Symbol cls, attr_class *feature);
+  bool check_main(Classes classes);
   void install_methods_and_attrs();
 
 public:
