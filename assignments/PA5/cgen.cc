@@ -21,7 +21,7 @@
 // fill in the rest.
 //
 //**************************************************************
-
+#include <algorithm>
 #include "cgen.h"
 #include "cgen_gc.h"
 
@@ -622,6 +622,8 @@ CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s)
    if (cgen_debug) cout << "Building CgenClassTable" << endl;
    install_basic_classes();
    install_classes(classes);
+   install_classtags(classes->len() + 5);
+   install_attrs_and_methods();
    build_inheritance_tree();
 
    code();
@@ -774,6 +776,36 @@ void CgenClassTable::install_classes(Classes cs)
     install_class(new CgenNode(cs->nth(i),NotBasic,this));
 }
 
+void CgenClassTable::install_classtags(int len) {
+    int curr_tag = 0;
+    CgenNodeP curr_cgennode;
+    for (List<CgenNode> *l = nds; l; l = l->tl()) { // 将其中的CgenNode逐个进行设置
+        // 设置该node的tag
+        curr_cgennode = l->hd();
+        curr_cgennode->set_classtag(len - curr_tag - 1);
+        class_tag_map_[curr_cgennode->get_name()] = len - curr_tag - 1;
+        curr_tag++;
+    }
+}
+
+void CgenClassTable::install_attrs_and_methods() {
+    CgenNodeP curr_cgennode;
+    Features curr_features;
+    for (List<CgenNode> *l = nds; l; l = l->tl()) {
+        curr_cgennode = l->hd();
+        curr_features = curr_cgennode->get_features();
+        Feature curr_feature;
+        for (int i = curr_features->first(); curr_features->more(i); i = curr_features->next(i)) {
+            curr_feature = curr_features->nth(i);
+            if (curr_feature->is_method()) {
+                class_method_map_[curr_cgennode->get_name()].push_back(static_cast<method_class*>(curr_feature));
+            } else {
+                class_attr_map_[curr_cgennode->get_name()].push_back(static_cast<attr_class*>(curr_feature));
+            }
+        }
+    }
+}
+
 //
 // CgenClassTable::build_inheritance_tree
 //
@@ -812,13 +844,13 @@ std::vector<CgenNodeP> CgenNode::get_parents_list() {
     CgenNodeP pa = this;
     std::vector<CgenNodeP> parents;
     while (true) {
-        // std::cout << pa->get_name()->get_string() << endl;
         parents.push_back(pa);
         if (pa->get_name() == Object) {
             break;
         }
         pa = pa->get_parentnd();
     }
+    std::reverse(parents.begin(), parents.end());
     return parents;
 }
 
@@ -868,7 +900,7 @@ void CgenClassTable::code_object_disptabs() {
         Features curr_features;
         emit_disptable_ref(head->get_name(), str);
         str << LABEL;
-        for (auto pait = parents.rbegin(); pait != parents.rend(); ++pait) { //需要遍历父类中的method
+        for (auto pait = parents.begin(); pait != parents.end(); ++pait) { //需要遍历父类中的method
             curr_features = (*pait)->get_features();
             // 遍历其中的method
             Feature curr_feature;
@@ -886,8 +918,52 @@ void CgenClassTable::code_object_disptabs() {
 }
 
 void CgenClassTable::code_protobjs() {
-
-
+    CgenNodeP curr_cgennode, curr_parent;
+    for (List<CgenNode> *l = nds; l; l = l->tl()) {
+        // 第一个word就是class_tag
+        curr_cgennode = l->hd();
+        Symbol curr_name = curr_cgennode->get_name();
+        emit_protobj_ref(curr_name, str);
+        str << LABEL;
+        str << WORD << curr_cgennode->get_classtag() << endl;
+        // 第二个word也就是总的size
+        int attr_cnt = class_attr_map_[curr_name].size();
+        auto parents = curr_cgennode->get_parents_list();
+        for (auto parent : parents) {
+            Symbol parent_name = parent->get_name();
+            if (parent_name == curr_cgennode->get_name()) {
+                continue;
+            }
+            // 将其中的attr进行累加
+            attr_cnt += class_attr_map_[parent_name].size();
+        }
+        str << WORD << attr_cnt + 3 << endl;
+        // 第三个就是dispatch指针
+        str << WORD;
+        emit_disptable_ref(curr_name, str);
+        str << endl;
+        // 接下来就是逐个attr,应该是从最base的class一直到当前的class
+        for (auto parent : parents) {
+            Symbol parent_name = parent->get_name();
+            const attrList& curr_attr_list = class_attr_map_[parent_name];
+            for (auto attr : curr_attr_list) {
+                // 先打印出来name+attrname试试看
+                // str << parent_name << " " << attr->get_name() << endl;
+                Symbol attr_type = attr->get_type();
+                str << WORD;
+                if (attr_type == Str) {   // 这个地方的处理尚待修改
+                    str << "str attr" << endl;
+                } else if (attr_type == Bool) {
+                    str << "bool attr" << endl;
+                } else if (attr_type == Int) {
+                    str << "int attr" << endl;
+                } else {
+                    str << 0 << endl;
+                }
+            }
+        }
+        str << WORD << -1 << endl;
+    }
 }
 
 void CgenClassTable::code_object_inits() {
@@ -932,6 +1008,9 @@ void CgenClassTable::code()
   if (cgen_debug) cout << "coding object dispatabs" << endl;
   code_object_disptabs();
 
+  if (cgen_debug) cout << "coding object prot" << endl;
+  code_protobjs();
+
 }
 
 
@@ -949,6 +1028,7 @@ CgenNodeP CgenClassTable::root()
 
 CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
    class__class((const class__class &) *nd),
+   class_tag_(0),
    parentnd(NULL),
    children(NULL),
    basic_status(bstatus)

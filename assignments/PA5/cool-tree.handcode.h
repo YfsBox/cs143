@@ -79,8 +79,8 @@ Symbol get_name()     { return name; }
 
 #define attr_EXTRAS             \
 bool is_method() { return false;} \
-Symbol get_name()   { return name;  }
-
+Symbol get_name()   { return name;  } \
+Symbol get_type()   { return type_decl;  }
 
 #define Feature_SHARED_EXTRAS                                       \
 void dump_with_types(ostream&,int);    

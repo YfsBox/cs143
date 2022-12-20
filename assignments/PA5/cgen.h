@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <vector>
+#include <map>
 #include "emit.h"
 #include "cool-tree.h"
 #include "symtab.h"
@@ -16,14 +17,18 @@ class CgenNode;
 typedef CgenNode *CgenNodeP;
 
 class CgenClassTable : public SymbolTable<Symbol,CgenNode> {
+public:
+    typedef std::vector<attr_class*> attrList;
+    typedef std::vector<method_class*> methodList;
 private:
    List<CgenNode> *nds;     // 维护的整个程序中的所有class
+   std::map<Symbol, int> class_tag_map_;
+   std::map<Symbol, attrList> class_attr_map_;
+   std::map<Symbol, methodList> class_method_map_;
    ostream& str;
    int stringclasstag;
    int intclasstag;
    int boolclasstag;
-
-
 // The following methods emit code for
 // constants and global declarations.
 
@@ -52,6 +57,8 @@ private:
    void install_basic_classes();
    void install_class(CgenNodeP nd);
    void install_classes(Classes cs);
+   void install_classtags(int len);
+   void install_attrs_and_methods();
    void build_inheritance_tree();
    void set_relations(CgenNodeP nd);
 public:
@@ -65,7 +72,8 @@ public:
 
 
 class CgenNode : public class__class { // 每一个都对应一个class
-private: 
+private:
+   int class_tag_;
    CgenNodeP parentnd;                        // Parent of class
    List<CgenNode> *children;                  // Children of class
    Basicness basic_status;                    // `Basic' if class is basic
@@ -78,6 +86,8 @@ public:
    void add_child(CgenNodeP child);
    List<CgenNode> *get_children() { return children; }
    void set_parentnd(CgenNodeP p);
+   void set_classtag(int tag) { class_tag_ = tag; }
+   int get_classtag() const { return class_tag_; }
    CgenNodeP get_parentnd() { return parentnd; }
    std::vector<CgenNodeP> get_parents_list();
 
