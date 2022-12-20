@@ -65,11 +65,21 @@ virtual void dump_with_types(ostream&,int) = 0;
 Symbol get_name()   { return name; }		       \
 Symbol get_parent() { return parent; }     	       \
 Symbol get_filename() { return filename; }             \
-void dump_with_types(ostream&,int);                    
-
+void dump_with_types(ostream&,int);                    \
+Features get_features() { return features; }
 
 #define Feature_EXTRAS                                        \
-virtual void dump_with_types(ostream&,int) = 0; 
+virtual void dump_with_types(ostream&,int) = 0;               \
+virtual bool is_method() = 0;                                 \
+virtual Symbol get_name() = 0;
+
+#define method_EXTRAS               \
+bool is_method() { return true; }   \
+Symbol get_name()     { return name; }
+
+#define attr_EXTRAS             \
+bool is_method() { return false;} \
+Symbol get_name()   { return name;  }
 
 
 #define Feature_SHARED_EXTRAS                                       \

@@ -109,7 +109,7 @@ static char *gc_init_names[] =
   { "_NoGC_Init", "_GenGC_Init", "_ScnGC_Init" };
 static char *gc_collect_names[] =
   { "_NoGC_Collect", "_GenGC_Collect", "_ScnGC_Collect" };
-
+static CgenClassTable *codegen_classtable = nullptr;
 
 //  BoolConst is a class that implements code generation for operations
 //  on the two booleans, which are given global names here.
@@ -135,7 +135,7 @@ void program_class::cgen(ostream &os)
   os << "# start of generated code\n";
 
   initialize_constants();
-  CgenClassTable *codegen_classtable = new CgenClassTable(classes,os);
+  codegen_classtable = new CgenClassTable(classes,os);
 
   os << "\n# end of generated code\n";
 }
@@ -154,7 +154,7 @@ void program_class::cgen(ostream &os)
 //  for symbolic names you can use to refer to the strings.
 //
 //////////////////////////////////////////////////////////////////////////////
-
+// 用于输出汇编指令
 static void emit_load(char *dest_reg, int offset, char *source_reg, ostream& s)
 {
   s << LW << dest_reg << " " << offset * WORD_SIZE << "(" << source_reg << ")" 
@@ -354,7 +354,6 @@ static void emit_gc_check(char *source, ostream &s)
   s << JAL << "_gc_check" << endl;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 // coding strings, ints, and booleans
@@ -403,7 +402,6 @@ void StringEntry::code_def(ostream& s, int stringclasstag)
 
 
  /***** Add dispatch information for class String ******/
-
       s << endl;                                              // dispatch table
       s << WORD;  lensym->code_ref(s);  s << endl;            // string length
   emit_string_constant(s,str);                                // ascii string
@@ -438,7 +436,6 @@ void IntEntry::code_def(ostream &s, int intclasstag)
 {
   // Add -1 eye catcher
   s << WORD << "-1" << endl;
-
   code_ref(s);  s << LABEL                                // label
       << WORD << intclasstag << endl                      // class tag
       << WORD << (DEFAULT_OBJFIELDS + INT_SLOTS) << endl  // object size
@@ -527,7 +524,6 @@ void CgenClassTable::code_global_data()
   str << GLOBAL << INTTAG << endl;
   str << GLOBAL << BOOLTAG << endl;
   str << GLOBAL << STRINGTAG << endl;
-
   //
   // We also need to know the tag of the Int, String, and Bool classes
   // during code generation.
@@ -610,7 +606,6 @@ void CgenClassTable::code_constants()
   //
   stringtable.add_string("");
   inttable.add_string("0");
-
   stringtable.code_string_table(str,stringclasstag);
   inttable.code_string_table(str,intclasstag);
   code_bools(boolclasstag);
@@ -623,7 +618,7 @@ CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s)
    intclasstag =    0 /* Change to your Int class tag here */;
    boolclasstag =   0 /* Change to your Bool class tag here */;
 
-   enterscope();
+   enterscope(); // 进入一个全局的作用域
    if (cgen_debug) cout << "Building CgenClassTable" << endl;
    install_basic_classes();
    install_classes(classes);
@@ -633,13 +628,12 @@ CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s)
    exitscope();
 }
 
-void CgenClassTable::install_basic_classes()
+void CgenClassTable::install_basic_classes()  // 将basic class加入
 {
 
 // The tree package uses these globals to annotate the classes built below.
   //curr_lineno  = 0;
-  Symbol filename = stringtable.add_string("<basic class>");
-
+  Symbol filename = stringtable.add_string("<basic class>");  // 对于字符串常量需要将其加入到stringtable中
 //
 // A few special class names are installed in the lookup table but not
 // the class list.  Thus, these classes exist, but are not part of the
@@ -657,7 +651,6 @@ void CgenClassTable::install_basic_classes()
   addid(prim_slot,
 	new CgenNode(class_(prim_slot,No_class,nil_Features(),filename),
 			    Basic,this));
-
 // 
 // The Object class has no parent class. Its methods are
 //        cool_abort() : Object    aborts the program
@@ -771,7 +764,7 @@ void CgenClassTable::install_class(CgenNodeP nd)
 
   // The class name is legal, so add it to the list of classes
   // and the symbol table.
-  nds = new List<CgenNode>(nd,nds);
+  nds = new List<CgenNode>(nd,nds); // 将class加入到CgenClassTable中
   addid(name,nd);
 }
 
@@ -815,32 +808,129 @@ void CgenNode::set_parentnd(CgenNodeP p)
   parentnd = p;
 }
 
+std::vector<CgenNodeP> CgenNode::get_parents_list() {
+    CgenNodeP pa = this;
+    std::vector<CgenNodeP> parents;
+    while (true) {
+        // std::cout << pa->get_name()->get_string() << endl;
+        parents.push_back(pa);
+        if (pa->get_name() == Object) {
+            break;
+        }
+        pa = pa->get_parentnd();
+    }
+    return parents;
+}
+
+void CgenClassTable::code_class_nametabs() {
+    str << CLASSNAMETAB << LABEL;
+
+    List<CgenNode> *nds_list = nds;
+    CgenNode *head;
+    StringEntry* str_entry;
+    while (nds_list) {
+        head = nds_list->hd();
+        Symbol name = head->get_name();
+        str_entry = stringtable.lookup_string(name->get_string());
+        str << WORD;
+        str_entry->code_ref(str);
+        str << endl;
+        nds_list = nds_list->tl();
+    }
+}
+
+void CgenClassTable::code_class_objtabs() {
+    str << CLASSOBJTAB << LABEL;
+    List<CgenNode> *nd_list = nds;
+    CgenNode *head;
+    while (nd_list) {
+        head = nd_list->hd();
+        Symbol name = head->get_name();
+        str << WORD;
+        emit_protobj_ref(name, str);
+        str << endl;
+
+        str << WORD;
+        emit_init_ref(name, str);
+        str << endl;
+
+        nd_list = nd_list->tl();
+    }
+}
+
+void CgenClassTable::code_object_disptabs() {
+    List<CgenNode> *nd_list = nds;
+    CgenNode *head;
+    while (nd_list) {
+        head = nd_list->hd();
+        // Symbol name = head->get_name()
+        std::vector<CgenNodeP> parents = head->get_parents_list();
+        Features curr_features;
+        emit_disptable_ref(head->get_name(), str);
+        str << LABEL;
+        for (auto pait = parents.rbegin(); pait != parents.rend(); ++pait) { //需要遍历父类中的method
+            curr_features = (*pait)->get_features();
+            // 遍历其中的method
+            Feature curr_feature;
+            for (int i = curr_features->first(); curr_features->more(i); i = curr_features->next(i)) {
+                curr_feature = curr_features->nth(i);
+                if (curr_feature->is_method()) {
+                    str << WORD;
+                    emit_method_ref((*pait)->get_name(), curr_feature->get_name(), str);
+                    str << endl;
+                }
+            }
+        }
+        nd_list = nd_list->tl();
+    }
+}
+
+void CgenClassTable::code_protobjs() {
+
+
+}
+
+void CgenClassTable::code_object_inits() {
+
+}
+
+void CgenClassTable::code_main_method() {
+
+}
+
+void CgenClassTable::code_methods() {
+
+}
+
 
 
 void CgenClassTable::code()
 {
   if (cgen_debug) cout << "coding global data" << endl;
   code_global_data();
-
   if (cgen_debug) cout << "choosing gc" << endl;
   code_select_gc();
-
   if (cgen_debug) cout << "coding constants" << endl;
   code_constants();
-
 //                 Add your code to emit
 //                   - prototype objects
 //                   - class_nameTab
 //                   - dispatch tables
 //
-
   if (cgen_debug) cout << "coding global text" << endl;
   code_global_text();
-
 //                 Add your code to emit
 //                   - object initializer
 //                   - the class methods
 //                   - etc...
+  if (cgen_debug) cout << "coding class name tab" << endl;
+  code_class_nametabs();
+
+  if (cgen_debug) cout << "coding class object table" << endl;
+  code_class_objtabs();
+
+  if (cgen_debug) cout << "coding object dispatabs" << endl;
+  code_object_disptabs();
 
 }
 
@@ -873,7 +963,7 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
 //   appropriate expression.  You may add or remove parameters
 //   as you wish, but if you do, remember to change the parameters
 //   of the declarations in `cool-tree.h'  Sample code for
-//   constant integers, strings, and booleans are provided.
+//   constant intsegers, strings, and booleans are provided.
 //
 //*****************************************************************
 
