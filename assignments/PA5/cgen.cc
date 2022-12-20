@@ -952,11 +952,17 @@ void CgenClassTable::code_protobjs() {
                 Symbol attr_type = attr->get_type();
                 str << WORD;
                 if (attr_type == Str) {   // 这个地方的处理尚待修改
-                    str << "str attr" << endl;
+                    StringEntry *strentry = stringtable.lookup_string("");
+                    strentry->code_ref(str);
+                    str << endl;
                 } else if (attr_type == Bool) {
-                    str << "bool attr" << endl;
+                    BoolConst boolconst(FALSE);
+                    boolconst.code_ref(str);
+                    str << endl;
                 } else if (attr_type == Int) {
-                    str << "int attr" << endl;
+                    IntEntry *intentry = inttable.lookup_string("0");
+                    intentry->code_ref(str);
+                    str << endl;
                 } else {
                     str << 0 << endl;
                 }
