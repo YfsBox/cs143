@@ -5,7 +5,7 @@
       <paths name="HuaWeiYun (b906d694-d99f-40cd-b6c6-a7dde3d5cd73)">
         <serverdata>
           <mappings>
-            <mapping deploy="/usr/class/cool" local="$PROJECT_DIR$" />
+            <mapping deploy="/usr/class/cs143" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

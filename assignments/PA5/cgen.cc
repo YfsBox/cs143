@@ -943,6 +943,7 @@ void CgenClassTable::code_protobjs() {
         emit_disptable_ref(curr_name, str);
         str << endl;
         // 接下来就是逐个attr,应该是从最base的class一直到当前的class
+        int offset = ATTR_BASE_OFFSET; //
         for (auto parent : parents) {
             Symbol parent_name = parent->get_name();
             const attrList& curr_attr_list = class_attr_map_[parent_name];
@@ -951,6 +952,7 @@ void CgenClassTable::code_protobjs() {
                 // str << parent_name << " " << attr->get_name() << endl;
                 Symbol attr_type = attr->get_type();
                 str << WORD;
+                attr_offset_map_[curr_name][attr] = offset++;
                 if (attr_type == Str) {   // 这个地方的处理尚待修改
                     StringEntry *strentry = stringtable.lookup_string("");
                     strentry->code_ref(str);
@@ -962,6 +964,7 @@ void CgenClassTable::code_protobjs() {
                 } else {
                     str << 0;
                 }
+                // str << " " << attr_offset_map_[curr_name][attr] << " ";
                 str << endl;
             }
         }
@@ -993,21 +996,10 @@ void CgenClassTable::code_object_inits() {
         for (auto attr : curr_attrs) {
             Expression init_expr = attr->get_init();
             Symbol attr_type = attr->get_type();
-            if (init_expr->is_empty()) { // 如果是空的,就设置为默认的初始化值
-                if (attr_type == Int) {
-
-                } else if (attr_type == Bool) {
-
-
-                } else if (attr_type == Str) {
-
-
-                } else {
-
-                }
-            } else {
-
-
+            if (!init_expr->is_empty()) { // 如果是空的,就设置为默认的初始化值
+                init_expr->code(str);
+                int attr_off = attr_offset_map_[curr_cgen->get_name()][attr];
+                emit_store(ACC, attr_off, SELF, str);
             }
         }
         emit_move(ACC, SELF, str);
@@ -1124,6 +1116,12 @@ void let_class::code(ostream &s) {
 }
 
 void plus_class::code(ostream &s) {
+    e1->code(s);
+    emit_push(ACC, s);
+    e2->code(s);
+    emit_load(T1, 1, SP, s);
+    emit_add(ACC, T1, ACC, s);
+    emit_addiu(SP, SP, 4, s);
 }
 
 void sub_class::code(ostream &s) {
