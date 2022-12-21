@@ -88,12 +88,12 @@ void dump_with_types(ostream&,int);
 
 
 #define Formal_EXTRAS                              \
-virtual void dump_with_types(ostream&,int) = 0;
-
+virtual void dump_with_types(ostream&,int) = 0;     \
+virtual Symbol get_name() = 0;
 
 #define formal_EXTRAS                           \
-void dump_with_types(ostream&,int);
-
+void dump_with_types(ostream&,int);             \
+Symbol get_name() { return name; }
 
 #define Case_EXTRAS                             \
 virtual void dump_with_types(ostream& ,int) = 0;

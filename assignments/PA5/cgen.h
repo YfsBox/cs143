@@ -34,6 +34,7 @@ private:
    int stringclasstag;
    int intclasstag;
    int boolclasstag;
+   CgenNodeP curr_cgenclass_;
 // The following methods emit code for
 // constants and global declarations.
 

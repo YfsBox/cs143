@@ -111,6 +111,12 @@ static char *gc_collect_names[] =
   { "_NoGC_Collect", "_GenGC_Collect", "_ScnGC_Collect" };
 static CgenClassTable *codegen_classtable = nullptr;
 
+
+static bool is_basic_class(Symbol name) {
+    return name == Object || name == Str || name == Bool || name == Int || name == IO;
+}
+
+static EnvTable* envTable = nullptr;
 //  BoolConst is a class that implements code generation for operations
 //  on the two booleans, which are given global names here.
 BoolConst falsebool(FALSE);
@@ -135,6 +141,7 @@ void program_class::cgen(ostream &os)
   os << "# start of generated code\n";
 
   initialize_constants();
+  envTable = new EnvTable();
   codegen_classtable = new CgenClassTable(classes,os);
 
   os << "\n# end of generated code\n";
@@ -352,6 +359,24 @@ static void emit_gc_check(char *source, ostream &s)
 {
   if (source != (char*)A1) emit_move(A1, source, s);
   s << JAL << "_gc_check" << endl;
+}
+
+static void emit_start_frame(ostream &s) {
+    emit_addiu(SP, SP, -12, s);
+    emit_store(FP, 3, SP, s);
+    emit_store(SELF, 2, SP, s);
+    emit_store(RA, 1, SP, s);
+    emit_addiu(FP, SP, 4, s);
+    emit_move(SELF, ACC, s);
+}
+
+static void emit_end_frame(ostream &s) {
+    emit_move(ACC, SELF, s);
+    emit_load(FP, 3, SP, s);
+    emit_load(SELF, 2, SP, s);
+    emit_load(RA, 1, SP, s);
+    emit_addiu(SP, SP, 12, s);
+    emit_return(s);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -612,7 +637,7 @@ void CgenClassTable::code_constants()
 }
 
 
-CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s)
+CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s), curr_cgenclass_(nullptr)
 {
    stringclasstag = 0 /* Change to your String class tag here */;
    intclasstag =    0 /* Change to your Int class tag here */;
@@ -937,7 +962,7 @@ void CgenClassTable::code_protobjs() {
             // 将其中的attr进行累加
             attr_cnt += class_attr_map_[parent_name].size();
         }
-        str << WORD << attr_cnt + 3 << endl;
+        str << WORD << attr_cnt + ATTR_BASE_OFFSET << endl;
         // 第三个就是dispatch指针
         str << WORD;
         emit_disptable_ref(curr_name, str);
@@ -972,18 +997,16 @@ void CgenClassTable::code_protobjs() {
     }
 }
 
+
+
 void CgenClassTable::code_object_inits() {
     CgenNodeP curr_cgen;
     for (List<CgenNode> *l = nds; l; l = l->tl()) {
         curr_cgen = l->hd();
+        curr_cgenclass_ = curr_cgen;
         emit_init_ref(curr_cgen->get_name(), str);
         str << LABEL;
-        emit_addiu(SP, SP, -12, str);
-        emit_store(FP, 3, SP, str);
-        emit_store(SELF, 2, SP, str);
-        emit_store(RA, 1, SP, str);
-        emit_addiu(FP, SP, 4, str);
-        emit_move(SELF, ACC, str);
+        emit_start_frame(str);
 
         CgenNodeP parent = curr_cgen->get_parentnd();
         if (parent && parent->get_name() != No_class) {
@@ -1002,12 +1025,7 @@ void CgenClassTable::code_object_inits() {
                 emit_store(ACC, attr_off, SELF, str);
             }
         }
-        emit_move(ACC, SELF, str);
-        emit_load(FP, 3, SP, str);
-        emit_load(SELF, 2, SP, str);
-        emit_load(RA, 1, SP, str);
-        emit_addiu(SP, SP, 12, str);
-        str << JAL << RA << endl;
+        emit_end_frame(str);
     }
 }
 
@@ -1016,10 +1034,37 @@ void CgenClassTable::code_main_method() {
 }
 
 void CgenClassTable::code_methods() {
-
+    CgenNodeP curr_cgennode;
+    for (List<CgenNode> *l = nds; l; l = l->tl()) {
+        curr_cgennode = l->hd();
+        curr_cgenclass_ = curr_cgennode;
+        Symbol cgenname = curr_cgenclass_->get_name();
+        if (is_basic_class(cgenname)) { // basic中的method无需做出处理
+            continue;
+        }
+        // 只处理本层的method
+        const methodList& methods = class_method_map_[cgenname];
+        Formals curr_formals;
+        std::list<Formal> formal_list;
+        for (auto method : methods) {
+            envTable->enterscope();
+            curr_formals = method->formals;
+            for (int i = curr_formals->first(); curr_formals->more(i); i = curr_formals->next(i)) {
+                formal_list.push_front(curr_formals->nth(i));
+            }
+            int offset = 1;
+            for (auto formal : formal_list) {
+                envTable->addid(formal->get_name(), offset++);
+            }
+            emit_method_ref(curr_cgenclass_->get_name(), method->get_name(), str);
+            str << LABEL;
+            emit_start_frame(str);
+            method->expr->code(str);
+            emit_end_frame(str);
+            envTable->exitscope();
+        }
+    }
 }
-
-
 
 void CgenClassTable::code()
 {
@@ -1054,6 +1099,9 @@ void CgenClassTable::code()
 
   if (cgen_debug) cout << "coding object init method" << endl;
   code_object_inits();
+
+  if (cgen_debug) cout << "coding methods" << endl;
+  code_methods();
 
 }
 
