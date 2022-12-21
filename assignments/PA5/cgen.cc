@@ -1164,30 +1164,82 @@ void let_class::code(ostream &s) {
 }
 
 void plus_class::code(ostream &s) {
-    e1->code(s);
-    emit_push(ACC, s);
+    e1->code(s);  // 返回到a0的结果是一个表示Intconst的label，也就是lebal
+    emit_push(ACC, s);      // 其结果是Int对象的地址
     e2->code(s);
-    emit_load(T1, 1, SP, s);
-    emit_add(ACC, T1, ACC, s);
-    emit_addiu(SP, SP, 4, s);
+    emit_jal("Object.copy", s); //由于Int是基于对象进行计算的，所以不能单纯地计算，还需要创建出一个对象
+    // 最后的返回值也应该是一个对象
+    emit_load(T1, 1, SP, s); // 此时T1保存的是expr1产生的Int的地址
+    emit_load(T2, ATTR_BASE_OFFSET, T1, s); // 获取Int1中的具体的value
+    emit_load(T3, ATTR_BASE_OFFSET, ACC, s); // 获取Int2中的具体的value
+    emit_addiu(SP, SP, 4, s); // 将SP恢复
+    // 此时的ACC仍然是复制出来的Int3
+    emit_add(T3, T2, T3, s);
+    // 将T3的结果加载到ACC地址对应的Int3中
+    emit_store(T3, ATTR_BASE_OFFSET, ACC, s);
 }
 
 void sub_class::code(ostream &s) {
+    e1->code(s);
+    emit_push(ACC, s);
+    e2->code(s);
+    emit_jal("Object.copy", s);
+
+    emit_load(T1, 1, SP, s);
+    emit_load(T2, ATTR_BASE_OFFSET, T1, s);
+    emit_load(T3, ATTR_BASE_OFFSET, ACC, s);
+    emit_addiu(SP, SP, 4, s);
+
+    emit_sub(T3, T2, T3, s);
+    emit_store(T3, ATTR_BASE_OFFSET, ACC, s);
 }
 
 void mul_class::code(ostream &s) {
+    e1->code(s);
+    emit_push(ACC, s);
+    e2->code(s);
+    emit_jal("Object.copy", s);
+
+    emit_load(T1, 1, SP, s);
+    emit_load(T2, ATTR_BASE_OFFSET, T1, s);
+    emit_load(T3, ATTR_BASE_OFFSET, ACC, s);
+    emit_addiu(SP, SP, 4, s);
+
+    emit_mul(T3, T2, T3, s);
+    emit_store(T3, ATTR_BASE_OFFSET, ACC, s);
 }
 
 void divide_class::code(ostream &s) {
+    e1->code(s);
+    emit_push(ACC, s);
+    e2->code(s);
+    emit_jal("Object.copy", s);
+
+    emit_load(T1, 1, SP, s);
+    emit_load(T2, ATTR_BASE_OFFSET, T1, s);
+    emit_load(T3, ATTR_BASE_OFFSET, ACC, s);
+    emit_addiu(SP, SP, 4, s);
+
+    emit_div(T3, T2, T3, s);
+    emit_store(T3, ATTR_BASE_OFFSET, ACC, s);
 }
 
 void neg_class::code(ostream &s) {
+    e1->code(s);
+    emit_jal("Object.copy", s); // 拷贝一份，其地址在ACC中
+
+    emit_load(T1, ATTR_BASE_OFFSET, ACC, s); // 将其值存储在T1中
+    emit_neg(T1, T1, s); // 其neg结果处于T1中
+
+    emit_store(T1, ATTR_BASE_OFFSET, ACC, s); // 改变其结果的值，也就是neg后的结果
 }
 
 void lt_class::code(ostream &s) {
 }
 
 void eq_class::code(ostream &s) {
+
+
 }
 
 void leq_class::code(ostream &s) {
@@ -1196,7 +1248,7 @@ void leq_class::code(ostream &s) {
 void comp_class::code(ostream &s) {
 }
 
-void int_const_class::code(ostream& s) {
+void int_const_class::code(ostream& s) { // 加载的仅仅是地址,也就是标签而已
   //
   // Need to be sure we have an IntEntry *, not an arbitrary Symbol
   //
