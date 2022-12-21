@@ -192,7 +192,7 @@ static void emit_load_string(char *dest, StringEntry *str, ostream& s)
 
 static void emit_load_int(char *dest, IntEntry *i, ostream& s)
 {
-  emit_partial_load_address(dest,s);
+  emit_partial_load_address(dest,s); // 所加载的是一个字符串的地址
   i->code_ref(s);
   s << endl;
 }
@@ -954,18 +954,15 @@ void CgenClassTable::code_protobjs() {
                 if (attr_type == Str) {   // 这个地方的处理尚待修改
                     StringEntry *strentry = stringtable.lookup_string("");
                     strentry->code_ref(str);
-                    str << endl;
                 } else if (attr_type == Bool) {
-                    BoolConst boolconst(FALSE);
-                    boolconst.code_ref(str);
-                    str << endl;
+                    falsebool.code_ref(str);
                 } else if (attr_type == Int) {
                     IntEntry *intentry = inttable.lookup_string("0");
                     intentry->code_ref(str);
-                    str << endl;
                 } else {
-                    str << 0 << endl;
+                    str << 0;
                 }
+                str << endl;
             }
         }
         str << WORD << -1 << endl;
@@ -973,7 +970,53 @@ void CgenClassTable::code_protobjs() {
 }
 
 void CgenClassTable::code_object_inits() {
+    CgenNodeP curr_cgen;
+    for (List<CgenNode> *l = nds; l; l = l->tl()) {
+        curr_cgen = l->hd();
+        emit_init_ref(curr_cgen->get_name(), str);
+        str << LABEL;
+        emit_addiu(SP, SP, -12, str);
+        emit_store(FP, 3, SP, str);
+        emit_store(SELF, 2, SP, str);
+        emit_store(RA, 1, SP, str);
+        emit_addiu(FP, SP, 4, str);
+        emit_move(SELF, ACC, str);
 
+        CgenNodeP parent = curr_cgen->get_parentnd();
+        if (parent && parent->get_name() != No_class) {
+            str << JAL;
+            emit_init_ref(parent->get_name(), str);
+            str << endl;
+        }
+        // 处理中间的attr,这一部分比较复杂, 只是处理本层的attr
+        const attrList& curr_attrs = class_attr_map_[curr_cgen->get_name()];
+        for (auto attr : curr_attrs) {
+            Expression init_expr = attr->get_init();
+            Symbol attr_type = attr->get_type();
+            if (init_expr->is_empty()) { // 如果是空的,就设置为默认的初始化值
+                if (attr_type == Int) {
+
+                } else if (attr_type == Bool) {
+
+
+                } else if (attr_type == Str) {
+
+
+                } else {
+
+                }
+            } else {
+
+
+            }
+        }
+        emit_move(ACC, SELF, str);
+        emit_load(FP, 3, SP, str);
+        emit_load(SELF, 2, SP, str);
+        emit_load(RA, 1, SP, str);
+        emit_addiu(SP, SP, 12, str);
+        str << JAL << RA << endl;
+    }
 }
 
 void CgenClassTable::code_main_method() {
@@ -1016,6 +1059,9 @@ void CgenClassTable::code()
 
   if (cgen_debug) cout << "coding object prot" << endl;
   code_protobjs();
+
+  if (cgen_debug) cout << "coding object init method" << endl;
+  code_object_inits();
 
 }
 
@@ -1104,21 +1150,19 @@ void leq_class::code(ostream &s) {
 void comp_class::code(ostream &s) {
 }
 
-void int_const_class::code(ostream& s)  
-{
+void int_const_class::code(ostream& s) {
   //
   // Need to be sure we have an IntEntry *, not an arbitrary Symbol
   //
-  emit_load_int(ACC,inttable.lookup_string(token->get_string()),s);
+  IntEntry *int_entry = inttable.lookup_string(token->get_string());
+  emit_load_int(ACC, int_entry, s); // load $a0 int_constxx
 }
 
-void string_const_class::code(ostream& s)
-{
+void string_const_class::code(ostream& s) {
   emit_load_string(ACC,stringtable.lookup_string(token->get_string()),s);
 }
 
-void bool_const_class::code(ostream& s)
-{
+void bool_const_class::code(ostream& s) {
   emit_load_bool(ACC, BoolConst(val), s);
 }
 

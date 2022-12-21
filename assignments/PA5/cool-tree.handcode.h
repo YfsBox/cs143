@@ -80,7 +80,8 @@ Symbol get_name()     { return name; }
 #define attr_EXTRAS             \
 bool is_method() { return false;} \
 Symbol get_name()   { return name;  } \
-Symbol get_type()   { return type_decl;  }
+Symbol get_type()   { return type_decl;  } \
+Expression get_init()  { return init; }
 
 #define Feature_SHARED_EXTRAS                                       \
 void dump_with_types(ostream&,int);    
@@ -109,11 +110,85 @@ Expression set_type(Symbol s) { type = s; return this; } \
 virtual void code(ostream&) = 0; \
 virtual void dump_with_types(ostream&,int) = 0;  \
 void dump_type(ostream&, int);               \
-Expression_class() { type = (Symbol) NULL; }
+Expression_class() { type = (Symbol) NULL; } \
+virtual bool is_empty() = 0;
+
 
 #define Expression_SHARED_EXTRAS           \
 void code(ostream&); 			   \
-void dump_with_types(ostream&,int); 
+void dump_with_types(ostream&,int);
+
+#define assign_EXTRAS       \
+bool is_empty() { return false;}
+
+#define static_dispatch_EXTRAS \
+bool is_empty() { return false; }
+
+#define dispatch_EXTRAS         \
+bool is_empty() { return false; }
+
+#define cond_EXTRAS     \
+bool is_empty() { return false; }
+
+#define loop_EXTRAS \
+bool is_empty() { return false; }
+
+#define typcase_EXTRAS \
+bool is_empty() { return false; }
+
+#define block_EXTRAS \
+bool is_empty() { return false; }
+
+#define let_EXTRAS \
+bool is_empty()  { return false;}
+
+#define plus_EXTRAS \
+bool is_empty()     { return false;}
+
+#define sub_EXTRAS      \
+bool is_empty()     { return false; }
+
+#define mul_EXTRAS \
+bool is_empty()     { return false;}
+
+#define divide_EXTRAS \
+bool is_empty()     { return false; }
+
+#define neg_EXTRAS \
+bool is_empty()     { return false; }
+
+#define lt_EXTRAS \
+bool is_empty()     { return false; }
+
+#define eq_EXTRAS \
+bool is_empty()     { return false; }
+
+#define leq_EXTRAS \
+bool is_empty()     { return false; }
+
+#define comp_EXTRAS \
+bool is_empty()     { return false; }
+
+#define int_const_EXTRAS \
+bool is_empty()     { return false;}
+
+#define bool_const_EXTRAS \
+bool is_empty()     { return false;}
+
+#define string_const_EXTRAS \
+bool is_empty()     { return false;}
+
+#define new__EXTRAS \
+bool is_empty()     { return false;}
+
+#define isvoid_EXTRAS \
+bool is_empty()     { return false;}
+
+#define no_expr_EXTRAS \
+bool is_empty()     { return true;}
+
+#define object_EXTRAS \
+bool is_empty()     { return false;}
 
 
 #endif
