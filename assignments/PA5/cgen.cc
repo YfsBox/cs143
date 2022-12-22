@@ -379,6 +379,16 @@ static void emit_end_frame(ostream &s) {
     emit_return(s);
 }
 
+static void emit_load_t1_t2(ostream &s, Expression e1, Expression e2) {
+    e1->code(s);
+    emit_push(ACC, s); // 将e1产生的地址压栈
+    e2->code(s);
+
+    emit_load(T1, 1, SP, s);
+    emit_move(T2, ACC, s);
+    emit_addiu(SP, SP, 4, s);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 // coding strings, ints, and booleans
@@ -422,8 +432,9 @@ void StringEntry::code_def(ostream& s, int stringclasstag)
 
   code_ref(s);  s  << LABEL                                             // label
       << WORD << stringclasstag << endl                                 // tag
-      << WORD << (DEFAULT_OBJFIELDS + STRING_SLOTS + (len+4)/4) << endl // size
-      << WORD << len;
+      << WORD << (DEFAULT_OBJFIELDS + STRING_SLOTS + (len+4)/4) << endl; // size
+    s << WORD;
+    emit_disptable_ref(Str, s);
 
 
  /***** Add dispatch information for class String ******/
@@ -463,8 +474,10 @@ void IntEntry::code_def(ostream &s, int intclasstag)
   s << WORD << "-1" << endl;
   code_ref(s);  s << LABEL                                // label
       << WORD << intclasstag << endl                      // class tag
-      << WORD << (DEFAULT_OBJFIELDS + INT_SLOTS) << endl  // object size
-      << WORD << WORD_SIZE;
+      << WORD << (DEFAULT_OBJFIELDS + INT_SLOTS) << endl;  // object size
+
+    s << WORD;
+    emit_disptable_ref(Int, s);
 
  /***** Add dispatch information for class Int ******/
       s << endl;                                          // dispatch table
@@ -506,8 +519,9 @@ void BoolConst::code_def(ostream& s, int boolclasstag)
 
   code_ref(s);  s << LABEL                                  // label
       << WORD << boolclasstag << endl                       // class tag
-      << WORD << (DEFAULT_OBJFIELDS + BOOL_SLOTS) << endl   // object size
-      << WORD;
+      << WORD << (DEFAULT_OBJFIELDS + BOOL_SLOTS) << endl;   // object size
+    s << WORD;
+    emit_disptable_ref(Bool, s);
 
  /***** Add dispatch information for class Bool ******/
 
@@ -997,6 +1011,7 @@ void CgenClassTable::code_protobjs() {
         // 第一个word就是class_tag
         curr_cgennode = l->hd();
         Symbol curr_name = curr_cgennode->get_name();
+        str << WORD << -1 << endl;
         emit_protobj_ref(curr_name, str);
         str << LABEL;
         str << WORD << curr_cgennode->get_classtag() << endl;
@@ -1042,7 +1057,6 @@ void CgenClassTable::code_protobjs() {
                 str << endl;
             }
         }
-        str << WORD << -1 << endl;
     }
 }
 
@@ -1253,8 +1267,21 @@ void cond_class::code(ostream &s) {
 }
 
 void loop_class::code(ostream &s) {
+    int start_lebal = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+    int end_lebal = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
 
+    emit_label_def(start_lebal, s);
+    pred->code(s);
+    emit_load(T1, ATTR_BASE_OFFSET, ACC, s);
+    emit_beq(T1, ZERO, end_lebal, s); // 条件等于0时结束
 
+    body->code(s);
+    emit_branch(start_lebal, s); // 跳转回去
+    emit_label_def(end_lebal, s); // 结束循环对应的lebal
+
+    emit_move(ACC, ZERO, s); // 返回值为0，对应了void
 }
 
 void typcase_class::code(ostream &s) {
@@ -1270,9 +1297,26 @@ void block_class::code(ostream &s) {
 }
 
 void let_class::code(ostream &s) {
+    // 首先处理的时init，要区分是否为empty的情况
+    init->code(s);
+    if (init->is_empty()) {
+        if (type_decl == Int) {
+            emit_load_int(ACC, inttable.lookup_string("0"), s);
+        } else if (type_decl == Str) {
+            emit_load_string(ACC, stringtable.lookup_string(""), s);
+        } else if (type_decl == Bool) {
+            emit_load_bool(ACC, falsebool, s);
+        }
+    }
+    // 然后进入新的frame,并加入变量，但是这个偏移量是需要调整的
+    emit_push(ACC, s); // 将init对应的变量,也就是let定义的变量加入到其中
+    envTable->enterscope();
+    envTable->addid(identifier, 0); // 这个offset还有待处理
 
+    body->code(s);
 
-
+    envTable->exitscope();
+    emit_addiu(SP, SP, 4, s);
 }
 
 void plus_class::code(ostream &s) {
@@ -1346,17 +1390,19 @@ void neg_class::code(ostream &s) {
     emit_store(T1, ATTR_BASE_OFFSET, ACC, s); // 改变其结果的值，也就是neg后的结果
 }
 
-void lt_class::code(ostream &s) {
-}
+void lt_class::code(ostream &s) { // 一般对应了Int之间的大小比较
+    emit_load_t1_t2(s, e1, e2);
+    // 获取了两个Int中所对应的值
+    emit_load(T1, ATTR_BASE_OFFSET, T1, s);
+    emit_load(T2, ATTR_BASE_OFFSET, T2, s);
+    // 创建标签
+    int out_lebal = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
 
-static void emit_load_t1_t2(ostream &s, Expression e1, Expression e2) {
-    e1->code(s);
-    emit_push(ACC, s); // 将e1产生的地址压栈
-    e2->code(s);
-
-    emit_load(T1, 1, SP, s);
-    emit_move(T2, ACC, s);
-    emit_addiu(SP, SP, 4, s);
+    emit_load_bool(ACC, truebool, s);
+    emit_blt(T1, T2, out_lebal, s);
+    emit_load_bool(ACC, falsebool, s);
+    emit_label_def(out_lebal, s);
 }
 
 void eq_class::code(ostream &s) {
@@ -1430,6 +1476,16 @@ void new__class::code(ostream &s) {
 }
 
 void isvoid_class::code(ostream &s) {
+    e1->code(s);
+    emit_move(T1, ACC, s);
+
+    int lebal_id = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+    // 验证T1是否是0
+    emit_load_bool(ACC, truebool, s);
+    emit_beq(T1, ZERO, s); // 如果是void
+    emit_load_bool(ACC, falsebool, s);
+    emit_label_def(lebal_id, s);
 }
 
 void no_expr_class::code(ostream &s) { // 相当于返回0
