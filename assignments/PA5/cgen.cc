@@ -638,8 +638,8 @@ void CgenClassTable::code_constants()
 
 
 CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s),
-curr_cgenclass_(nullptr),
-labelid_(0)
+labelid_(0),
+curr_cgenclass_(nullptr)
 {
    stringclasstag = 0 /* Change to your String class tag here */;
    intclasstag =    0 /* Change to your Int class tag here */;
@@ -928,10 +928,32 @@ void CgenClassTable::code_class_objtabs() {
     }
 }
 
-std::string get_meth_name(Symbol cls, Symbol meth) {
-    std::string class_name = cls->get_string();
-    std::string meth_name = meth->get_string();
-    return class_name + "." + meth_name;
+bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int *offset) {
+    if (meth_offset_map_.find(cls1) == meth_offset_map_.end()) {
+        return false;
+    }
+    if (meth_offset_map_[cls1].find(cls2) == meth_offset_map_[cls1].end()) {
+        return false;
+    }
+    if (meth_offset_map_[cls1][cls2].find(meth) == meth_offset_map_[cls1][cls2].end()) {
+        return false;
+    }
+    *offset = meth_offset_map_[cls1][cls2][meth];
+    return true;
+}
+
+bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
+    if (meth_offset_map_.find(cls) == meth_offset_map_.end()) {
+        return false;
+    }
+    for (auto &[class_name, offset_map] : meth_offset_map_[cls]) {
+        auto findit = offset_map.find(meth);
+        if (findit != offset_map.end()) {
+            *offset = findit->second;
+            return true;
+        }
+    }
+    return false;
 }
 
 void CgenClassTable::code_object_disptabs() {
@@ -955,7 +977,7 @@ void CgenClassTable::code_object_disptabs() {
                     str << WORD;
                     emit_method_ref((*pait)->get_name(), curr_feature->get_name(), str);
                     str << endl;
-                    meth_offset_map_[head->get_name()][get_meth_name(head->get_name(), curr_feature->get_name())] = curr_offset++;
+                    meth_offset_map_[head->get_name()][(*pait)->get_name()][curr_feature->get_name()] = curr_offset++;
                 }
             }
         }
@@ -1169,19 +1191,38 @@ void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
 }
 
 void static_dispatch_class::code(ostream &s) {
+    emit_push(FP, s);
+    Expression curr_expr;
+    for (int i = actual->first(); actual->more(i); i = actual->next(i)) {
+        curr_expr = actual->nth(i);
+        curr_expr->code(s);
+        emit_push(ACC, s);
+    }
+    expr->code(s);
+    emit_load(T1, DISPTABLE_OFFSET, ACC, s);
+    int offset;
+    codegen_classtable->get_meth_offset(expr->get_type(), type_name, name, &offset);
+
+    emit_load(T1, offset, T1, s);
+    emit_jalr(T1, s);
 }
 
 void dispatch_class::code(ostream &s) {
     // 首先将参数对应的表达式一个个压栈
+    emit_push(FP, s);
     Expression curr_expr;
     for (int i = actual->first(); actual->more(i); i = actual->next(i)) {
+        curr_expr = actual->nth(i);
         curr_expr->code(s);
         emit_push(ACC, s);
     }
     expr->code(s); // 求出来self所对应的指针
     emit_load(T1, DISPTABLE_OFFSET, ACC, s); // 将dispacth表加载到T1中
+    int offset;
+    codegen_classtable->get_meth_offset(expr->get_type(), name, &offset);
+    emit_load(T1, offset, T1, s); // 获取该dispatch在表中的地址
 
-
+    emit_jalr(T1, s);
 }
 
 void cond_class::code(ostream &s) {

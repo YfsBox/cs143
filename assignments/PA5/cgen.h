@@ -24,7 +24,7 @@ public:
     typedef std::vector<attr_class*> attrList;
     typedef std::vector<method_class*> methodList;
     typedef std::map<Symbol, int> attroffsetList;
-    typedef std::map<std::string, int> methoffsetList;
+    typedef std::map<Symbol, std::map<Symbol, int>> methoffsetList;
 private:
    List<CgenNode> *nds;     // 维护的整个程序中的所有class
    std::map<Symbol, int> class_tag_map_;
@@ -75,7 +75,8 @@ public:
    void add_labelid() { labelid_++; }
    CgenNodeP get_curr_class() const { return curr_cgenclass_; }
    bool get_attr_offset(Symbol cls, Symbol attr, int *offset);
-   bool get_meth_offset(Symbol cls, const std::string &methname, int *offset);
+   bool get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int *offset);
+   bool get_meth_offset(Symbol cls, Symbol meth, int *offset);
 
    ostream& codege_str() {
        return str;
