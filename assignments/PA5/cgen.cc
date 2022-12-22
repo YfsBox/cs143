@@ -423,7 +423,7 @@ void StringEntry::code_def(ostream& s, int stringclasstag)
   code_ref(s);  s  << LABEL                                             // label
       << WORD << stringclasstag << endl                                 // tag
       << WORD << (DEFAULT_OBJFIELDS + STRING_SLOTS + (len+4)/4) << endl // size
-      << WORD;
+      << WORD << len;
 
 
  /***** Add dispatch information for class String ******/
@@ -464,10 +464,9 @@ void IntEntry::code_def(ostream &s, int intclasstag)
   code_ref(s);  s << LABEL                                // label
       << WORD << intclasstag << endl                      // class tag
       << WORD << (DEFAULT_OBJFIELDS + INT_SLOTS) << endl  // object size
-      << WORD; 
+      << WORD << WORD_SIZE;
 
  /***** Add dispatch information for class Int ******/
-
       s << endl;                                          // dispatch table
       s << WORD << str << endl;                           // integer value
 }
@@ -481,7 +480,7 @@ void IntEntry::code_def(ostream &s, int intclasstag)
 void IntTable::code_string_table(ostream &s, int intclasstag)
 {
   for (List<IntEntry> *l = tbl; l; l = l->tl())
-    l->hd()->code_def(s,intclasstag);
+      l->hd()->code_def(s,intclasstag);
 }
 
 
@@ -569,8 +568,7 @@ void CgenClassTable::code_global_data()
 //
 //***************************************************
 
-void CgenClassTable::code_global_text()
-{
+void CgenClassTable::code_global_text() {
   str << GLOBAL << HEAP_START << endl
       << HEAP_START << LABEL 
       << WORD << 0 << endl
@@ -588,14 +586,12 @@ void CgenClassTable::code_global_text()
   str << endl;
 }
 
-void CgenClassTable::code_bools(int boolclasstag)
-{
+void CgenClassTable::code_bools(int boolclasstag) {
   falsebool.code_def(str,boolclasstag);
   truebool.code_def(str,boolclasstag);
 }
 
-void CgenClassTable::code_select_gc()
-{
+void CgenClassTable::code_select_gc() {
   //
   // Generate GC choice constants (pointers to GC functions)
   //
@@ -645,6 +641,7 @@ curr_cgenclass_(nullptr)
    intclasstag =    0 /* Change to your Int class tag here */;
    boolclasstag =   0 /* Change to your Bool class tag here */;
 
+   codegen_classtable = this;
    enterscope(); // 进入一个全局的作用域
    if (cgen_debug) cout << "Building CgenClassTable" << endl;
    install_basic_classes();
@@ -820,8 +817,17 @@ void CgenClassTable::install_classtags(int len) {
     for (List<CgenNode> *l = nds; l; l = l->tl()) { // 将其中的CgenNode逐个进行设置
         // 设置该node的tag
         curr_cgennode = l->hd();
+        Symbol cgennode_name = curr_cgennode->get_name();
         curr_cgennode->set_classtag(len - curr_tag - 1);
-        class_tag_map_[curr_cgennode->get_name()] = len - curr_tag - 1;
+        class_tag_map_[cgennode_name] = len - curr_tag - 1;
+
+        if (cgennode_name == Str) {
+            stringclasstag = curr_tag;
+        } else if (cgennode_name == Bool) {
+            boolclasstag = curr_tag;
+        } else if (cgennode_name == Int) {
+            intclasstag = curr_tag;
+        }
         curr_tag++;
     }
 }
