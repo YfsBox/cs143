@@ -137,7 +137,9 @@ bool is_empty() { return false; }
 bool is_empty() { return false; }
 
 #define block_EXTRAS \
-bool is_empty() { return false; }
+bool is_empty() { return false; } \
+Expressions get_body() { return body; }
+
 
 #define let_EXTRAS \
 bool is_empty()  { return false;}

@@ -23,13 +23,15 @@ class CgenClassTable : public SymbolTable<Symbol,CgenNode> {
 public:
     typedef std::vector<attr_class*> attrList;
     typedef std::vector<method_class*> methodList;
-    typedef std::map<attr_class*, int> attroffsetList;
+    typedef std::map<Symbol, int> attroffsetList;
+    typedef std::map<std::string, int> methoffsetList;
 private:
    List<CgenNode> *nds;     // 维护的整个程序中的所有class
    std::map<Symbol, int> class_tag_map_;
    std::map<Symbol, attrList> class_attr_map_;  // 不包含parent中的attr
    std::map<Symbol, methodList> class_method_map_;
    std::map<Symbol, attroffsetList> attr_offset_map_;
+   std::map<Symbol, methoffsetList> meth_offset_map_;
    ostream& str;
    int stringclasstag;
    int intclasstag;
@@ -53,7 +55,6 @@ private:
    void code_protobjs();
    void code_object_inits();
    // 第三阶段实现
-   void code_main_method();
    void code_methods();
 
 // The following creates an inheritance graph from
@@ -72,6 +73,10 @@ public:
    CgenClassTable(Classes, ostream& str);
    int get_labelid() const { return labelid_; }
    void add_labelid() { labelid_++; }
+   CgenNodeP get_curr_class() const { return curr_cgenclass_; }
+   bool get_attr_offset(Symbol cls, Symbol attr, int *offset);
+   bool get_meth_offset(Symbol cls, const std::string &methname, int *offset);
+
    ostream& codege_str() {
        return str;
    }

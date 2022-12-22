@@ -777,6 +777,17 @@ void CgenClassTable::install_basic_classes()  // 将basic class加入
 
 }
 
+bool CgenClassTable::get_attr_offset(Symbol cls, Symbol attr, int *offset) {
+    if (attr_offset_map_.find(cls) == attr_offset_map_.end()) {
+        return false;
+    }
+    if (attr_offset_map_[cls].find(attr) == attr_offset_map_[cls].end()) {
+        return false;
+    }
+    *offset = attr_offset_map_[cls][attr];
+    return true;
+}
+
 // CgenClassTable::install_class
 // CgenClassTable::install_classes
 //
@@ -917,6 +928,12 @@ void CgenClassTable::code_class_objtabs() {
     }
 }
 
+std::string get_meth_name(Symbol cls, Symbol meth) {
+    std::string class_name = cls->get_string();
+    std::string meth_name = meth->get_string();
+    return class_name + "." + meth_name;
+}
+
 void CgenClassTable::code_object_disptabs() {
     List<CgenNode> *nd_list = nds;
     CgenNode *head;
@@ -927,6 +944,7 @@ void CgenClassTable::code_object_disptabs() {
         Features curr_features;
         emit_disptable_ref(head->get_name(), str);
         str << LABEL;
+        int curr_offset = 0;
         for (auto pait = parents.begin(); pait != parents.end(); ++pait) { //需要遍历父类中的method
             curr_features = (*pait)->get_features();
             // 遍历其中的method
@@ -937,6 +955,7 @@ void CgenClassTable::code_object_disptabs() {
                     str << WORD;
                     emit_method_ref((*pait)->get_name(), curr_feature->get_name(), str);
                     str << endl;
+                    meth_offset_map_[head->get_name()][get_meth_name(head->get_name(), curr_feature->get_name())] = curr_offset++;
                 }
             }
         }
@@ -979,7 +998,7 @@ void CgenClassTable::code_protobjs() {
                 // str << parent_name << " " << attr->get_name() << endl;
                 Symbol attr_type = attr->get_type();
                 str << WORD;
-                attr_offset_map_[curr_name][attr] = offset++;
+                attr_offset_map_[curr_name][attr->get_name()] = offset++;
                 if (attr_type == Str) {   // 这个地方的处理尚待修改
                     StringEntry *strentry = stringtable.lookup_string("");
                     strentry->code_ref(str);
@@ -1023,16 +1042,12 @@ void CgenClassTable::code_object_inits() {
             Symbol attr_type = attr->get_type();
             if (!init_expr->is_empty()) { // 如果是空的,就设置为默认的初始化值
                 init_expr->code(str);
-                int attr_off = attr_offset_map_[curr_cgen->get_name()][attr];
+                int attr_off = attr_offset_map_[curr_cgen->get_name()][attr->get_name()];
                 emit_store(ACC, attr_off, SELF, str);
             }
         }
         emit_end_frame(str);
     }
-}
-
-void CgenClassTable::code_main_method() {
-
 }
 
 void CgenClassTable::code_methods() {
@@ -1141,28 +1156,76 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
 //
 //*****************************************************************
 
-void assign_class::code(ostream &s) {
+void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
+    expr->code(s);
+    CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
+    int offset;
+    if (codegen_classtable->get_attr_offset(curr_cgen->get_name(), name, &offset)) { // 属于attr类型的
+        emit_load(ACC, offset, SELF, s);
+    } else { // 需要通过FP来定位该变量
+        envTable->lookup(name, &offset);
+        emit_load(ACC, offset, FP, s);
+    }
 }
 
 void static_dispatch_class::code(ostream &s) {
 }
 
 void dispatch_class::code(ostream &s) {
+    // 首先将参数对应的表达式一个个压栈
+    Expression curr_expr;
+    for (int i = actual->first(); actual->more(i); i = actual->next(i)) {
+        curr_expr->code(s);
+        emit_push(ACC, s);
+    }
+    expr->code(s); // 求出来self所对应的指针
+    emit_load(T1, DISPTABLE_OFFSET, ACC, s); // 将dispacth表加载到T1中
+
+
 }
 
 void cond_class::code(ostream &s) {
+    pred->code(s);
+    // 载入T1和T2用于后续的比较
+    emit_load(T1, ATTR_BASE_OFFSET, ACC, s); // t1中也就是对应的value
+    emit_move(T2, ZERO, s); // T2中是0
+
+    int out_lebal = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+    int false_lebal = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+
+    emit_beq(T1, T2, false_lebal, s);
+    // 对应的是true
+    then_exp->code(s);
+    emit_branch(out_lebal, s);
+    // 对应的是false
+    emit_label_def(false_lebal, s);
+    else_exp->code(s);
+    emit_label_def(out_lebal, s);
 }
 
 void loop_class::code(ostream &s) {
+
+
 }
 
 void typcase_class::code(ostream &s) {
 }
 
 void block_class::code(ostream &s) {
+    Expressions exprs = body;
+    Expression expr;
+    for (int i = exprs->first(); exprs->more(i); i = exprs->next(i)) {
+        expr = exprs->nth(i);
+        expr->code(s);
+    }
 }
 
 void let_class::code(ostream &s) {
+
+
+
 }
 
 void plus_class::code(ostream &s) {
@@ -1258,7 +1321,7 @@ void eq_class::code(ostream &s) {
     if ((e1type == Int || e1type == Bool || e1type == Str)
         && (e2type == Int || e2type == Bool || e2type == Str)) {
         emit_load_bool(ACC, truebool, s);
-        emit_load(A1, falsebool, s);
+        emit_load_bool(A1, falsebool, s);
         emit_jal("equality_test", s);
         return;
     }
@@ -1281,9 +1344,9 @@ void leq_class::code(ostream &s) {
     int lebalid = codegen_classtable->get_labelid();
     codegen_classtable->add_labelid();
 
-    emit_load(ACC, truebool, s);
+    emit_load_bool(ACC, truebool, s);
     emit_bleq(T1, T2, lebalid, s);
-    emit_load(ACC, falsebool, s);
+    emit_load_bool(ACC, falsebool, s);
     emit_label_def(lebalid, s);
 }
 
@@ -1294,9 +1357,9 @@ void comp_class::code(ostream &s) {
     int lebalid = codegen_classtable->get_labelid();
     codegen_classtable->add_labelid();
 
-    emit_load(ACC, truebool, s);
+    emit_load_bool(ACC, truebool, s);
     emit_beq(T1, ZERO, lebalid, s);
-    emit_load(ACC, falsebool, s);
+    emit_load_bool(ACC, falsebool, s);
     emit_label_def(lebalid, s);
 }
 
@@ -1322,11 +1385,24 @@ void new__class::code(ostream &s) {
 void isvoid_class::code(ostream &s) {
 }
 
-void no_expr_class::code(ostream &s) {
-    emit_sub(ACC, ACC, ACC, s); // 相当于返回0
+void no_expr_class::code(ostream &s) { // 相当于返回0
+    emit_move(ACC, ZERO, s);
 }
 
 void object_class::code(ostream &s) {
+    if (name == self) {
+        emit_move(ACC, SELF, s);
+        return;
+    }
+    // 如果是当前class中的attr
+    CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
+    int offset;
+    if (codegen_classtable->get_attr_offset(curr_cgen->get_name(), name, &offset)) { // 属于attr类型的
+        emit_load(ACC, offset, SELF, s);
+    } else { // 需要通过FP来定位该变量
+        envTable->lookup(name, &offset);
+        emit_load(ACC, offset, FP, s);
+    }
 }
 
 
