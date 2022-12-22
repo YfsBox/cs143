@@ -637,7 +637,9 @@ void CgenClassTable::code_constants()
 }
 
 
-CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s), curr_cgenclass_(nullptr)
+CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s),
+curr_cgenclass_(nullptr),
+labelid_(0)
 {
    stringclasstag = 0 /* Change to your String class tag here */;
    intclasstag =    0 /* Change to your Int class tag here */;
@@ -1237,15 +1239,65 @@ void neg_class::code(ostream &s) {
 void lt_class::code(ostream &s) {
 }
 
+static void emit_load_t1_t2(ostream &s, Expression e1, Expression e2) {
+    e1->code(s);
+    emit_push(ACC, s); // 将e1产生的地址压栈
+    e2->code(s);
+
+    emit_load(T1, 1, SP, s);
+    emit_move(T2, ACC, s);
+    emit_addiu(SP, SP, 4, s);
+}
+
 void eq_class::code(ostream &s) {
-
-
+    // 首先比较地址
+    emit_load_t1_t2(s, e1, e2);
+    // 对于Int Str Bool类型可以直接比较的
+    Symbol e1type = e1->get_type();
+    Symbol e2type = e2->get_type();
+    if ((e1type == Int || e1type == Bool || e1type == Str)
+        && (e2type == Int || e2type == Bool || e2type == Str)) {
+        emit_load_bool(ACC, truebool, s);
+        emit_load(A1, falsebool, s);
+        emit_jal("equality_test", s);
+        return;
+    }
+    // 比较地址，比较不过就退出, 可以确定的是T1和T2不会受到干扰
+    int lebalid = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+    emit_load_bool(ACC, truebool, s);
+    emit_beq(T1, T2, lebalid, s);
+    emit_load_bool(ACC, falsebool, s);
+    emit_label_def(lebalid, s);
+    // 然后根据值去进行比较,在
 }
 
 void leq_class::code(ostream &s) {
+    emit_load_t1_t2(s, e1, e2);
+    // 默认是可以比较的类型,然后将其具体的值加载到t1和t2中
+    emit_load(T1, ATTR_BASE_OFFSET, T1, s);
+    emit_load(T2, ATTR_BASE_OFFSET, T2, s);
+
+    int lebalid = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+
+    emit_load(ACC, truebool, s);
+    emit_bleq(T1, T2, lebalid, s);
+    emit_load(ACC, falsebool, s);
+    emit_label_def(lebalid, s);
 }
 
 void comp_class::code(ostream &s) {
+    e1->code(s);
+    emit_load(T1, ATTR_BASE_OFFSET, ACC, s); // 获取其中的val
+
+    int lebalid = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+
+    emit_load(ACC, truebool, s);
+    emit_beq(T1, ZERO, lebalid, s);
+    emit_load(ACC, falsebool, s);
+    emit_label_def(lebalid, s);
 }
 
 void int_const_class::code(ostream& s) { // 加载的仅仅是地址,也就是标签而已
@@ -1271,6 +1323,7 @@ void isvoid_class::code(ostream &s) {
 }
 
 void no_expr_class::code(ostream &s) {
+    emit_sub(ACC, ACC, ACC, s); // 相当于返回0
 }
 
 void object_class::code(ostream &s) {

@@ -34,6 +34,7 @@ private:
    int stringclasstag;
    int intclasstag;
    int boolclasstag;
+   int labelid_;
    CgenNodeP curr_cgenclass_;
 // The following methods emit code for
 // constants and global declarations.
@@ -69,6 +70,8 @@ private:
    void set_relations(CgenNodeP nd);
 public:
    CgenClassTable(Classes, ostream& str);
+   int get_labelid() const { return labelid_; }
+   void add_labelid() { labelid_++; }
    ostream& codege_str() {
        return str;
    }
