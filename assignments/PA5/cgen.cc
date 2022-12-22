@@ -371,7 +371,7 @@ static void emit_start_frame(ostream &s) {
 }
 
 static void emit_end_frame(ostream &s) {
-    emit_move(ACC, SELF, s);
+    // emit_move(ACC, SELF, s);
     emit_load(FP, 3, SP, s);
     emit_load(SELF, 2, SP, s);
     emit_load(RA, 1, SP, s);
@@ -964,6 +964,7 @@ bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int 
 
 bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
     if (meth_offset_map_.find(cls) == meth_offset_map_.end()) {
+        std::cout << "find cls error\n";
         return false;
     }
     for (auto &[class_name, offset_map] : meth_offset_map_[cls]) {
@@ -973,6 +974,7 @@ bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
             return true;
         }
     }
+    std::cout << "return false end\n";
     return false;
 }
 
@@ -1088,6 +1090,7 @@ void CgenClassTable::code_object_inits() {
                 emit_store(ACC, attr_off, SELF, str);
             }
         }
+        emit_move(ACC, SELF, str);
         emit_end_frame(str);
     }
 }
@@ -1136,10 +1139,7 @@ void CgenClassTable::code()
 //                 Add your code to emit
 //                   - prototype objects
 //                   - class_nameTab
-//                   - dispatch tables
-//
-  if (cgen_debug) cout << "coding global text" << endl;
-  code_global_text();
+//                   - dispatch table
 //                 Add your code to emit
 //                   - object initializer
 //                   - the class methods
@@ -1155,6 +1155,9 @@ void CgenClassTable::code()
 
   if (cgen_debug) cout << "coding object prot" << endl;
   code_protobjs();
+
+  if (cgen_debug) cout << "coding global text" << endl;
+  code_global_text();
 
   if (cgen_debug) cout << "coding object init method" << endl;
   code_object_inits();
@@ -1198,6 +1201,14 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
 //
 //*****************************************************************
 
+static void emit_abort(int lebal, int lineno, ostream &s) {
+    emit_bne(ACC, ZERO, lebal, s);
+    s << LA << ACC << " str_const0" << endl;
+    emit_load_imm(T1, lineno, s);
+    emit_jal("_dispatch_abort", s);
+}
+
+
 void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
     expr->code(s);
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
@@ -1211,7 +1222,7 @@ void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
 }
 
 void static_dispatch_class::code(ostream &s) {
-    emit_push(FP, s);
+
     Expression curr_expr;
     for (int i = actual->first(); actual->more(i); i = actual->next(i)) {
         curr_expr = actual->nth(i);
@@ -1219,6 +1230,13 @@ void static_dispatch_class::code(ostream &s) {
         emit_push(ACC, s);
     }
     expr->code(s);
+
+    int lebalid = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+
+    emit_abort(lebalid, get_line_number(), s);
+
+    emit_label_def(lebalid, s);
     emit_load(T1, DISPTABLE_OFFSET, ACC, s);
     int offset;
     codegen_classtable->get_meth_offset(expr->get_type(), type_name, name, &offset);
@@ -1229,7 +1247,6 @@ void static_dispatch_class::code(ostream &s) {
 
 void dispatch_class::code(ostream &s) {
     // 首先将参数对应的表达式一个个压栈
-    emit_push(FP, s);
     Expression curr_expr;
     for (int i = actual->first(); actual->more(i); i = actual->next(i)) {
         curr_expr = actual->nth(i);
@@ -1237,9 +1254,20 @@ void dispatch_class::code(ostream &s) {
         emit_push(ACC, s);
     }
     expr->code(s); // 求出来self所对应的指针
+
+    int lebalid = codegen_classtable->get_labelid();
+    codegen_classtable->add_labelid();
+    // 判断该expr是否为abort
+    emit_abort(lebalid, get_line_number(), s);
+
+    emit_label_def(lebalid, s);
     emit_load(T1, DISPTABLE_OFFSET, ACC, s); // 将dispacth表加载到T1中
     int offset;
-    codegen_classtable->get_meth_offset(expr->get_type(), name, &offset);
+    Symbol expr_type = expr->get_type();
+    if (expr_type == SELF_TYPE) {
+        expr_type = codegen_classtable->get_curr_class()->get_name();
+    }
+    codegen_classtable->get_meth_offset(expr_type, name, &offset);
     emit_load(T1, offset, T1, s); // 获取该dispatch在表中的地址
 
     emit_jalr(T1, s);
@@ -1460,6 +1488,7 @@ void int_const_class::code(ostream& s) { // 加载的仅仅是地址,也就是�
   //
   // Need to be sure we have an IntEntry *, not an arbitrary Symbol
   //
+  s << "# the int const is " << token << endl;
   IntEntry *int_entry = inttable.lookup_string(token->get_string());
   emit_load_int(ACC, int_entry, s); // load $a0 int_constxx
 }
@@ -1473,6 +1502,14 @@ void bool_const_class::code(ostream& s) {
 }
 
 void new__class::code(ostream &s) {
+    // 首先需要获取的是该object的layout
+    std::string object_name = type_name->get_string();
+    std::string protobj_object = object_name + PROTOBJ_SUFFIX;
+    emit_load_address(ACC, const_cast<char *>(protobj_object.c_str()), s);
+    emit_jal("Object.copy", s);
+    std::string init_object = object_name + CLASSINIT_SUFFIX;
+    emit_jal(const_cast<char *>(init_object.c_str()), s);
+
 }
 
 void isvoid_class::code(ostream &s) {
@@ -1483,7 +1520,7 @@ void isvoid_class::code(ostream &s) {
     codegen_classtable->add_labelid();
     // 验证T1是否是0
     emit_load_bool(ACC, truebool, s);
-    emit_beq(T1, ZERO, s); // 如果是void
+    emit_beq(T1, ZERO, lebal_id, s); // 如果是void
     emit_load_bool(ACC, falsebool, s);
     emit_label_def(lebal_id, s);
 }
@@ -1495,6 +1532,7 @@ void no_expr_class::code(ostream &s) { // 相当于返回0
 void object_class::code(ostream &s) {
     if (name == self) {
         emit_move(ACC, SELF, s);
+        s << "# object return self\n";
         return;
     }
     // 如果是当前class中的attr
