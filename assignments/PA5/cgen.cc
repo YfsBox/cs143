@@ -661,8 +661,8 @@ curr_cgenclass_(nullptr)
    install_basic_classes();
    install_classes(classes);
    install_classtags(classes->len() + 5);
-   install_attrs_and_methods();
    build_inheritance_tree();
+   install_attrs_and_methods();
 
    code();
    exitscope();
@@ -850,19 +850,39 @@ void CgenClassTable::install_classtags(int len) {
 void CgenClassTable::install_attrs_and_methods() {
     CgenNodeP curr_cgennode;
     Features curr_features;
-    for (List<CgenNode> *l = nds; l; l = l->tl()) {
+    for (List<CgenNode> *l = nds; l; l = l->tl()) {  // 只涉及本层的
         curr_cgennode = l->hd();
         curr_features = curr_cgennode->get_features();
         Feature curr_feature;
+        Symbol curr_cgen_name = curr_cgennode->get_name();
         for (int i = curr_features->first(); curr_features->more(i); i = curr_features->next(i)) {
             curr_feature = curr_features->nth(i);
             if (curr_feature->is_method()) {
-                class_method_map_[curr_cgennode->get_name()].push_back(static_cast<method_class*>(curr_feature));
+                class_method_map_[curr_cgen_name].push_back(static_cast<method_class*>(curr_feature));
+                // auto find_meth_it = meth_offset_map_[curr_cgen_name].find(curr_feature->get_name());
             } else {
                 class_attr_map_[curr_cgennode->get_name()].push_back(static_cast<attr_class*>(curr_feature));
             }
         }
     }
+    // 设置meth_offset_map
+
+   for (List<CgenNode> *l = nds; l; l = l->tl()) {
+        curr_cgennode = l->hd();
+        Symbol curr_name = curr_cgennode->get_name();
+        // 获取继承chain
+        int curr_offset = 0;
+        auto chain = curr_cgennode->get_parents_list();
+        for (auto parent : chain) {
+            // 获取其中一层的method
+            auto methods = class_method_map_[parent->get_name()];
+            for (auto method : methods) {  // 获取其中的method
+                Symbol meth_name = method->get_name();
+                dispatch_tab_map_[curr_name].push_back({parent->get_name(), meth_name});
+                meth_offset_map_[curr_name][meth_name] = curr_offset++;
+            }
+        }
+   }
 }
 
 //
@@ -916,21 +936,7 @@ std::vector<CgenNodeP> CgenNode::get_parents_list() {
 void CgenClassTable::code_class_nametabs() {
     str << CLASSNAMETAB << LABEL;
     int len = class_tag_map_.size();
-    /*
-    List<CgenNode> *nds_list = nds;
-    CgenNode *head;
-    StringEntry* str_entry;
-    int tag_cnt = 0;
-    while (nds_list) {
-        head = nds_list->hd();
-        head->set_classtag(tag_cnt++);
-        Symbol name = head->get_name();
-        str_entry = stringtable.lookup_string(name->get_string());
-        str << WORD;
-        str_entry->code_ref(str);
-        str << endl;
-        nds_list = nds_list->tl();
-    }*/
+
     StringEntry* str_entry;
     for (int i = 0; i < len; i++) {
         Symbol name = class_tag_map_[i];
@@ -962,16 +968,17 @@ void CgenClassTable::code_class_objtabs() {
 }
 
 bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int *offset) {
-    if (meth_offset_map_.find(cls1) == meth_offset_map_.end()) {
+    if (dispatch_tab_map_.find(cls1) == dispatch_tab_map_.end()) {
         return false;
     }
-    if (meth_offset_map_[cls1].find(cls2) == meth_offset_map_[cls1].end()) {
-        return false;
+    int curr_offset = 0;
+    for (auto &[class_name, meth_name] : dispatch_tab_map_[cls1]) {
+        if (class_name == cls2 && meth_name == meth) {
+            *offset = curr_offset;
+            return true;
+        }
+        curr_offset++;
     }
-    if (meth_offset_map_[cls1][cls2].find(meth) == meth_offset_map_[cls1][cls2].end()) {
-        return false;
-    }
-    *offset = meth_offset_map_[cls1][cls2][meth];
     return true;
 }
 
@@ -981,19 +988,10 @@ bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
         // std::cout << "find cls error\n";
         return false;
     }
-    auto find_meth = meth_offset_map_[cls][cls].find(meth);
-    if (find_meth != meth_offset_map_[cls][cls].end()) {
+    auto find_meth = meth_offset_map_[cls].find(meth);
+    if (find_meth != meth_offset_map_[cls].end()) {
         *offset = find_meth->second;
-        // std::cout << "# find the meth from " << cls << endl;
         return true;
-    }
-    for (auto &[class_name, offset_map] : meth_offset_map_[cls]) {
-        auto findit = offset_map.find(meth);
-        if (findit != offset_map.end()) {
-            *offset = findit->second;
-            // std::cout << "# find the meth from " << findit->first << endl;
-            return true;
-        }
     }
     return false;
 }
@@ -1001,6 +999,7 @@ bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
 void CgenClassTable::code_object_disptabs() {
     List<CgenNode> *nd_list = nds;
     CgenNode *head;
+    /*
     while (nd_list) {
         head = nd_list->hd();
         // Symbol name = head->get_name()
@@ -1008,7 +1007,6 @@ void CgenClassTable::code_object_disptabs() {
         Features curr_features;
         emit_disptable_ref(head->get_name(), str);
         str << LABEL;
-        int curr_offset = 0;
         for (auto pait = parents.begin(); pait != parents.end(); ++pait) { //需要遍历父类中的method
             curr_features = (*pait)->get_features();
             // 遍历其中的method
@@ -1019,12 +1017,21 @@ void CgenClassTable::code_object_disptabs() {
                     str << WORD;
                     emit_method_ref((*pait)->get_name(), curr_feature->get_name(), str);
                     str << endl;
-                    meth_offset_map_[head->get_name()][(*pait)->get_name()][curr_feature->get_name()] = curr_offset++;
                 }
             }
         }
         nd_list = nd_list->tl();
+    }*/
+    for (auto &[class_name, distab] : dispatch_tab_map_) {
+        emit_disptable_ref(class_name, str);
+        str << LABEL;
+        for (auto &[meth_class, meth_name] : distab) {
+            str << WORD;
+            emit_method_ref(meth_class, meth_name, str);
+            str << endl;
+        }
     }
+
 }
 
 void CgenClassTable::code_protobjs() {

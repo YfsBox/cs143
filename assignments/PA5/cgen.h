@@ -24,14 +24,16 @@ public:
     typedef std::vector<attr_class*> attrList;
     typedef std::vector<method_class*> methodList;
     typedef std::map<Symbol, int> attroffsetList;
-    typedef std::map<Symbol, std::map<Symbol, int>> methoffsetList;
+    typedef std::map<Symbol, int> methoffsetList;
+    typedef std::list<std::pair<Symbol, Symbol>> dispatchtab;
 private:
    List<CgenNode> *nds;     // 维护的整个程序中的所有class
    std::map<int, Symbol> class_tag_map_;
    std::map<Symbol, attrList> class_attr_map_;  // 不包含parent中的attr
-   std::map<Symbol, methodList> class_method_map_;
+   std::map<Symbol, methodList> class_method_map_; // 每个class本层method
    std::map<Symbol, attroffsetList> attr_offset_map_;
    std::map<Symbol, methoffsetList> meth_offset_map_;
+   std::map<Symbol, dispatchtab> dispatch_tab_map_;
    ostream& str;
    int stringclasstag;
    int intclasstag;
