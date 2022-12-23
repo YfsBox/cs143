@@ -27,7 +27,7 @@ public:
     typedef std::map<Symbol, std::map<Symbol, int>> methoffsetList;
 private:
    List<CgenNode> *nds;     // 维护的整个程序中的所有class
-   std::map<Symbol, int> class_tag_map_;
+   std::map<int, Symbol> class_tag_map_;
    std::map<Symbol, attrList> class_attr_map_;  // 不包含parent中的attr
    std::map<Symbol, methodList> class_method_map_;
    std::map<Symbol, attroffsetList> attr_offset_map_;
@@ -92,8 +92,16 @@ private:
     std::list<symbol2offsetList> envlist_;
     int formal_fp_offset_;  // 用来记录当前formal对于fp的偏移
     int local_fp_offset_; // 用来记录当前local变量对于fp的偏移
+    int last_local_fp_offset_;
 
-    void init_fpoffset();
+    void init_formal_fpoffset() {
+        formal_fp_offset_ = DEFAULT_OBJFIELDS;
+    }
+    void init_local_fpoffset() {
+        local_fp_offset_ = -1;
+        last_local_fp_offset_ = -1;
+    }
+
 public:
     EnvTable() = default;
     ~EnvTable() = default;
@@ -108,29 +116,26 @@ public:
     bool lookup(Symbol name, int *offset); // 通过参数返回
 };
 
-void EnvTable::init_fpoffset() {
-    formal_fp_offset_ = DEFAULT_OBJFIELDS;
-    local_fp_offset_ = -1; // 避免和其他运算中的冲突
-}
-
 void EnvTable::enterframe() {
-    init_fpoffset();
+    init_formal_fpoffset();
+    init_local_fpoffset();
     enterscope();
 }
 
 void EnvTable::exitframe() {
-    init_fpoffset();
     exitscope();
+    init_formal_fpoffset();
+    init_local_fpoffset();
 }
 
 void EnvTable::enterscope() {
-    //std::cout << "#enter scope\n";
+    last_local_fp_offset_ = local_fp_offset_;
     envlist_.push_back({});
 }
 
-void EnvTable::exitscope() {
-    //std::cout << "#pop scope\n";
+void EnvTable::exitscope() { // 退出作用域的时候需要恢复local中的frame
     envlist_.pop_back();
+    local_fp_offset_ = last_local_fp_offset_;
 }
 
 void EnvTable::add_formal_id(Symbol name) {

@@ -831,16 +831,17 @@ void CgenClassTable::install_classtags(int len) {
     for (List<CgenNode> *l = nds; l; l = l->tl()) { // 将其中的CgenNode逐个进行设置
         // 设置该node的tag
         curr_cgennode = l->hd();
+        int curr_tagno = len - curr_tag - 1;
         Symbol cgennode_name = curr_cgennode->get_name();
-        curr_cgennode->set_classtag(len - curr_tag - 1);
-        class_tag_map_[cgennode_name] = len - curr_tag - 1;
+        curr_cgennode->set_classtag(curr_tagno);
+        class_tag_map_[curr_tagno] = cgennode_name;
 
         if (cgennode_name == Str) {
-            stringclasstag = curr_tag;
+            stringclasstag = curr_tagno;
         } else if (cgennode_name == Bool) {
-            boolclasstag = curr_tag;
+            boolclasstag = curr_tagno;
         } else if (cgennode_name == Int) {
-            intclasstag = curr_tag;
+            intclasstag = curr_tagno;
         }
         curr_tag++;
     }
@@ -914,19 +915,31 @@ std::vector<CgenNodeP> CgenNode::get_parents_list() {
 
 void CgenClassTable::code_class_nametabs() {
     str << CLASSNAMETAB << LABEL;
-
+    int len = class_tag_map_.size();
+    /*
     List<CgenNode> *nds_list = nds;
     CgenNode *head;
     StringEntry* str_entry;
+    int tag_cnt = 0;
     while (nds_list) {
         head = nds_list->hd();
+        head->set_classtag(tag_cnt++);
         Symbol name = head->get_name();
         str_entry = stringtable.lookup_string(name->get_string());
         str << WORD;
         str_entry->code_ref(str);
         str << endl;
         nds_list = nds_list->tl();
+    }*/
+    StringEntry* str_entry;
+    for (int i = 0; i < len; i++) {
+        Symbol name = class_tag_map_[i];
+        str_entry = stringtable.lookup_string(name->get_string());
+        str << WORD;
+        str_entry->code_ref(str);
+        str << endl;
     }
+
 }
 
 void CgenClassTable::code_class_objtabs() {
@@ -963,18 +976,25 @@ bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int 
 }
 
 bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
+    // std::cout << "# the class is " << cls << " and meth is " << meth << endl;
     if (meth_offset_map_.find(cls) == meth_offset_map_.end()) {
-        std::cout << "find cls error\n";
+        // std::cout << "find cls error\n";
         return false;
+    }
+    auto find_meth = meth_offset_map_[cls][cls].find(meth);
+    if (find_meth != meth_offset_map_[cls][cls].end()) {
+        *offset = find_meth->second;
+        // std::cout << "# find the meth from " << cls << endl;
+        return true;
     }
     for (auto &[class_name, offset_map] : meth_offset_map_[cls]) {
         auto findit = offset_map.find(meth);
         if (findit != offset_map.end()) {
             *offset = findit->second;
+            // std::cout << "# find the meth from " << findit->first << endl;
             return true;
         }
     }
-    std::cout << "return false end\n";
     return false;
 }
 
@@ -1507,14 +1527,19 @@ void bool_const_class::code(ostream& s) {
 }
 
 void new__class::code(ostream &s) {
-    // 首先需要获取的是该object的layout
     std::string object_name = type_name->get_string();
+    if (type_name == SELF_TYPE) {
+        // 首先获取此时的class
+        CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
+        object_name = curr_cgen->get_name()->get_string();
+    }
     std::string protobj_object = object_name + PROTOBJ_SUFFIX;
+    s << "# object protobj is " << protobj_object << endl;
     emit_load_address(ACC, const_cast<char *>(protobj_object.c_str()), s);
     emit_jal("Object.copy", s);
     std::string init_object = object_name + CLASSINIT_SUFFIX;
+    s << "# init protobj is " << init_object << endl;
     emit_jal(const_cast<char *>(init_object.c_str()), s);
-
 }
 
 void isvoid_class::code(ostream &s) {
