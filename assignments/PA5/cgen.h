@@ -88,35 +88,59 @@ public:
 class EnvTable {
 private:
     std::list<std::map<Symbol, int>> envlist_;
+    int fp_offset_;
+
+    void init_fpoffset();
 public:
     EnvTable() = default;
     ~EnvTable() = default;
 
+    void enterframe();
+    void exitframe();
     void enterscope();
     void exitscope();
 
-    void addid(Symbol name, int offset);
+    void addid(Symbol name);
     bool lookup(Symbol name, int *offset); // 通过参数返回
 };
 
+void EnvTable::init_fpoffset() {
+    fp_offset_ = DEFAULT_OBJFIELDS;
+}
+
+void EnvTable::enterframe() {
+    init_fpoffset();
+    enterscope();
+}
+
+void EnvTable::exitframe() {
+    init_fpoffset();
+    exitscope();
+}
+
 void EnvTable::enterscope() {
+    //std::cout << "#enter scope\n";
     envlist_.push_back({});
 }
 
 void EnvTable::exitscope() {
+    //std::cout << "#pop scope\n";
     envlist_.pop_back();
 }
 
-void EnvTable::addid(Symbol name, int offset) {
-    auto back = envlist_.back();
-    back[name] = offset;
+void EnvTable::addid(Symbol name) {
+    //std::cout << "#push name " << name << " and " << offset << endl;
+    envlist_.back()[name] = fp_offset_++;
 }
 
 bool EnvTable::lookup(Symbol name, int *offset) {
+    //std::cout <<"# find name " << name << " " << envlist_.size() << endl;
     for (auto rit = envlist_.rbegin(); rit != envlist_.rend(); ++rit) {
         auto findit = rit->find(name);
+        //std::cout << "# finding \n";
         if (findit != rit->end()) {
             *offset = findit->second;
+            // std::cout << name << *offset << " is offset \n";
             return true;
         }
     }

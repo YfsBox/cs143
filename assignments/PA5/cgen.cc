@@ -376,7 +376,7 @@ static void emit_end_frame(ostream &s) {
     emit_load(SELF, 2, SP, s);
     emit_load(RA, 1, SP, s);
     emit_addiu(SP, SP, 12, s);
-    emit_return(s);
+    // emit_return(s);
 }
 
 static void emit_load_t1_t2(ostream &s, Expression e1, Expression e2) {
@@ -1092,6 +1092,7 @@ void CgenClassTable::code_object_inits() {
         }
         emit_move(ACC, SELF, str);
         emit_end_frame(str);
+        emit_return(str);
     }
 }
 
@@ -1109,21 +1110,23 @@ void CgenClassTable::code_methods() {
         Formals curr_formals;
         std::list<Formal> formal_list;
         for (auto method : methods) {
-            envTable->enterscope();
+            formal_list.clear();
+            envTable->enterframe();
             curr_formals = method->formals;
             for (int i = curr_formals->first(); curr_formals->more(i); i = curr_formals->next(i)) {
                 formal_list.push_front(curr_formals->nth(i));
             }
-            int offset = 1;
             for (auto formal : formal_list) {
-                envTable->addid(formal->get_name(), offset++);
+                envTable->addid(formal->get_name());
             }
             emit_method_ref(curr_cgenclass_->get_name(), method->get_name(), str);
             str << LABEL;
             emit_start_frame(str);
             method->expr->code(str);
             emit_end_frame(str);
-            envTable->exitscope();
+            emit_addiu(SP, SP, formal_list.size() * WORD_SIZE, str);
+            emit_return(str);
+            envTable->exitframe();
         }
     }
 }
@@ -1210,6 +1213,7 @@ static void emit_abort(int lebal, int lineno, ostream &s) {
 
 
 void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
+    s << "# assign class coding\n";
     expr->code(s);
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
     int offset;
@@ -1339,7 +1343,7 @@ void let_class::code(ostream &s) {
     // 然后进入新的frame,并加入变量，但是这个偏移量是需要调整的
     emit_push(ACC, s); // 将init对应的变量,也就是let定义的变量加入到其中
     envTable->enterscope();
-    envTable->addid(identifier, 0); // 这个offset还有待处理
+    envTable->addid(identifier); // 这个offset还有待处理
 
     body->code(s);
 
@@ -1348,6 +1352,7 @@ void let_class::code(ostream &s) {
 }
 
 void plus_class::code(ostream &s) {
+    s << "# coding plus class\n";
     e1->code(s);  // 返回到a0的结果是一个表示Intconst的label，也就是lebal
     emit_push(ACC, s);      // 其结果是Int对象的地址
     e2->code(s);
@@ -1530,6 +1535,7 @@ void no_expr_class::code(ostream &s) { // 相当于返回0
 }
 
 void object_class::code(ostream &s) {
+    s << "# object class coding\n";
     if (name == self) {
         emit_move(ACC, SELF, s);
         s << "# object return self\n";
