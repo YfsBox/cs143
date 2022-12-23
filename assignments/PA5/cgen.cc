@@ -1211,17 +1211,16 @@ static void emit_abort(int lebal, int lineno, ostream &s) {
     emit_jal("_dispatch_abort", s);
 }
 
-
 void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
     s << "# assign class coding\n";
     expr->code(s);
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
     int offset;
     if (codegen_classtable->get_attr_offset(curr_cgen->get_name(), name, &offset)) { // 属于attr类型的
-        emit_load(ACC, offset, SELF, s);
+        emit_store(ACC, offset, SELF, s);
     } else { // 需要通过FP来定位该变量
         envTable->lookup(name, &offset);
-        emit_load(ACC, offset, FP, s);
+        emit_store(ACC, offset, FP, s); // 这里的store直接将地址转移到了FP+offset处，相当于浅拷贝
     }
 }
 

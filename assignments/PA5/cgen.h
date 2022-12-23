@@ -86,6 +86,8 @@ public:
 };
 
 class EnvTable {
+public:
+    typedef std::list<std::pair<Symbol, int>> symbol2offsetList;
 private:
     std::list<std::map<Symbol, int>> envlist_;
     int fp_offset_;
