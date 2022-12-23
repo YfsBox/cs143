@@ -25,7 +25,7 @@ public:
     typedef std::vector<method_class*> methodList;
     typedef std::map<Symbol, int> attroffsetList;
     typedef std::map<Symbol, int> methoffsetList;
-    typedef std::list<std::pair<Symbol, Symbol>> dispatchtab;
+    typedef std::vector<std::pair<Symbol, Symbol>> dispatchtab;
 private:
    List<CgenNode> *nds;     // 维护的整个程序中的所有class
    std::map<int, Symbol> class_tag_map_;
@@ -71,6 +71,7 @@ private:
    void install_attrs_and_methods();
    void build_inheritance_tree();
    void set_relations(CgenNodeP nd);
+
 public:
    CgenClassTable(Classes, ostream& str);
    int get_labelid() const { return labelid_; }
@@ -79,6 +80,11 @@ public:
    bool get_attr_offset(Symbol cls, Symbol attr, int *offset);
    bool get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int *offset);
    bool get_meth_offset(Symbol cls, Symbol meth, int *offset);
+   // 一些用来测试的函数
+   /*void test_meth_offset() {
+       for (auto )
+
+   }*/
 
    ostream& codege_str() {
        return str;

@@ -871,15 +871,21 @@ void CgenClassTable::install_attrs_and_methods() {
         curr_cgennode = l->hd();
         Symbol curr_name = curr_cgennode->get_name();
         // 获取继承chain
-        int curr_offset = 0;
         auto chain = curr_cgennode->get_parents_list();
         for (auto parent : chain) {
             // 获取其中一层的method
             auto methods = class_method_map_[parent->get_name()];
             for (auto method : methods) {  // 获取其中的method
                 Symbol meth_name = method->get_name();
-                dispatch_tab_map_[curr_name].push_back({parent->get_name(), meth_name});
-                meth_offset_map_[curr_name][meth_name] = curr_offset++;
+                //dispatch_tab_map_[curr_name].push_back({parent->get_name(), meth_name});
+                // meth_offset_map_[curr_name][meth_name] = curr_offset++;
+                if (meth_offset_map_[curr_name].find(meth_name) == meth_offset_map_[curr_name].end()) {
+                    dispatch_tab_map_[curr_name].push_back({parent->get_name(), meth_name});
+                    meth_offset_map_[curr_name][meth_name] = dispatch_tab_map_[curr_name].size() - 1;
+                } else {
+                    auto meth_offset = meth_offset_map_[curr_name][meth_name];
+                    dispatch_tab_map_[curr_name][meth_offset] = {parent->get_name(), meth_name};
+                }
             }
         }
    }
@@ -968,11 +974,11 @@ void CgenClassTable::code_class_objtabs() {
 }
 
 bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int *offset) {
-    if (dispatch_tab_map_.find(cls1) == dispatch_tab_map_.end()) {
+    if (dispatch_tab_map_.find(cls2) == dispatch_tab_map_.end()) {
         return false;
     }
     int curr_offset = 0;
-    for (auto &[class_name, meth_name] : dispatch_tab_map_[cls1]) {
+    for (auto &[class_name, meth_name] : dispatch_tab_map_[cls2]) {
         if (class_name == cls2 && meth_name == meth) {
             *offset = curr_offset;
             return true;
@@ -983,13 +989,13 @@ bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int 
 }
 
 bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
-    // std::cout << "# the class is " << cls << " and meth is " << meth << endl;
     if (meth_offset_map_.find(cls) == meth_offset_map_.end()) {
         // std::cout << "find cls error\n";
         return false;
     }
     auto find_meth = meth_offset_map_[cls].find(meth);
     if (find_meth != meth_offset_map_[cls].end()) {
+        // std::cout << "# find the meth is from " << find_meth->second << endl;
         *offset = find_meth->second;
         return true;
     }
@@ -1268,9 +1274,12 @@ void static_dispatch_class::code(ostream &s) {
     emit_abort(lebalid, get_line_number(), s);
 
     emit_label_def(lebalid, s);
-    emit_load(T1, DISPTABLE_OFFSET, ACC, s);
+    // emit_load(T1, DISPTABLE_OFFSET, ACC, s);
+    std::string suffix = DISPTAB_SUFFIX;
+    std::string distab_addr = type_name->get_string() + suffix;
+    emit_load_address(T1, const_cast<char*>(distab_addr.c_str()), s);
     int offset;
-    codegen_classtable->get_meth_offset(expr->get_type(), type_name, name, &offset);
+    codegen_classtable->get_meth_offset(type_name, name, &offset);
 
     emit_load(T1, offset, T1, s);
     emit_jalr(T1, s);
