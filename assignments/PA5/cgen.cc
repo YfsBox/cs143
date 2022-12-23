@@ -1117,7 +1117,7 @@ void CgenClassTable::code_methods() {
                 formal_list.push_front(curr_formals->nth(i));
             }
             for (auto formal : formal_list) {
-                envTable->addid(formal->get_name());
+                envTable->add_formal_id(formal->get_name());
             }
             emit_method_ref(curr_cgenclass_->get_name(), method->get_name(), str);
             str << LABEL;
@@ -1216,11 +1216,12 @@ void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
     expr->code(s);
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
     int offset;
+    if (envTable->lookup(name, &offset)) {
+        emit_store(ACC, offset, FP, s);
+        return;
+    }
     if (codegen_classtable->get_attr_offset(curr_cgen->get_name(), name, &offset)) { // 属于attr类型的
         emit_store(ACC, offset, SELF, s);
-    } else { // 需要通过FP来定位该变量
-        envTable->lookup(name, &offset);
-        emit_store(ACC, offset, FP, s); // 这里的store直接将地址转移到了FP+offset处，相当于浅拷贝
     }
 }
 
@@ -1342,7 +1343,7 @@ void let_class::code(ostream &s) {
     // 然后进入新的frame,并加入变量，但是这个偏移量是需要调整的
     emit_push(ACC, s); // 将init对应的变量,也就是let定义的变量加入到其中
     envTable->enterscope();
-    envTable->addid(identifier); // 这个offset还有待处理
+    envTable->add_local_id(identifier);
 
     body->code(s);
 
@@ -1543,11 +1544,12 @@ void object_class::code(ostream &s) {
     // 如果是当前class中的attr
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
     int offset;
+    if (envTable->lookup(name, &offset)) {
+        emit_load(ACC, offset, FP, s);
+        return;
+    }
     if (codegen_classtable->get_attr_offset(curr_cgen->get_name(), name, &offset)) { // 属于attr类型的
         emit_load(ACC, offset, SELF, s);
-    } else { // 需要通过FP来定位该变量
-        envTable->lookup(name, &offset);
-        emit_load(ACC, offset, FP, s);
     }
 }
 

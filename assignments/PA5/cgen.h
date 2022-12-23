@@ -89,8 +89,9 @@ class EnvTable {
 public:
     typedef std::list<std::pair<Symbol, int>> symbol2offsetList;
 private:
-    std::list<std::map<Symbol, int>> envlist_;
-    int fp_offset_;
+    std::list<symbol2offsetList> envlist_;
+    int formal_fp_offset_;  // 用来记录当前formal对于fp的偏移
+    int local_fp_offset_; // 用来记录当前local变量对于fp的偏移
 
     void init_fpoffset();
 public:
@@ -102,12 +103,14 @@ public:
     void enterscope();
     void exitscope();
 
-    void addid(Symbol name);
+    void add_formal_id(Symbol name);
+    void add_local_id(Symbol name);
     bool lookup(Symbol name, int *offset); // 通过参数返回
 };
 
 void EnvTable::init_fpoffset() {
-    fp_offset_ = DEFAULT_OBJFIELDS;
+    formal_fp_offset_ = DEFAULT_OBJFIELDS;
+    local_fp_offset_ = -1; // 避免和其他运算中的冲突
 }
 
 void EnvTable::enterframe() {
@@ -130,20 +133,24 @@ void EnvTable::exitscope() {
     envlist_.pop_back();
 }
 
-void EnvTable::addid(Symbol name) {
+void EnvTable::add_formal_id(Symbol name) {
     //std::cout << "#push name " << name << " and " << offset << endl;
-    envlist_.back()[name] = fp_offset_++;
+    envlist_.back().push_back({name, formal_fp_offset_++});
+}
+
+void EnvTable::add_local_id(Symbol name) {
+    envlist_.back().push_back({name, local_fp_offset_--});
 }
 
 bool EnvTable::lookup(Symbol name, int *offset) {
     //std::cout <<"# find name " << name << " " << envlist_.size() << endl;
     for (auto rit = envlist_.rbegin(); rit != envlist_.rend(); ++rit) {
-        auto findit = rit->find(name);
-        //std::cout << "# finding \n";
-        if (findit != rit->end()) {
-            *offset = findit->second;
-            // std::cout << name << *offset << " is offset \n";
-            return true;
+        const symbol2offsetList &sym2off_list = *rit;
+        for (auto rlit = sym2off_list.rbegin(); rlit != sym2off_list.rend(); ++rlit) {
+            if (rlit->first == name) {
+                *offset = rlit->second;
+                return true;
+            }
         }
     }
     return false;
