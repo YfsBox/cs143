@@ -97,11 +97,15 @@ Symbol get_name() { return name; }
 
 #define Case_EXTRAS                             \
 virtual void dump_with_types(ostream& ,int) = 0;    \
-virtual Symbol get_type() = 0;
+virtual Symbol get_type_decl() = 0;             \
+virtual Symbol get_name() = 0;                  \
+virtual Expression get_expr() = 0;
 
 #define branch_EXTRAS                                   \
 void dump_with_types(ostream& ,int);                    \
-Symbol get_type() { return type_decl; }
+Symbol get_type_decl() { return type_decl; }            \
+Symbol get_name() { return name; }                      \
+Expression get_expr() { return expr; }
 
 #define Expression_EXTRAS                    \
 Symbol type;                                 \

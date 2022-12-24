@@ -22,6 +22,7 @@
 //
 //**************************************************************
 #include <algorithm>
+#include <functional>
 #include "cgen.h"
 #include "cgen_gc.h"
 
@@ -660,9 +661,9 @@ curr_cgenclass_(nullptr)
    if (cgen_debug) cout << "Building CgenClassTable" << endl;
    install_basic_classes();
    install_classes(classes);
-   install_classtags(classes->len() + 5);
-   build_inheritance_tree();
    install_name_to_cgen();
+   build_inheritance_tree();
+   install_classtags();
    install_attrs_and_methods();
 
    code();
@@ -826,9 +827,10 @@ void CgenClassTable::install_classes(Classes cs)
     install_class(new CgenNode(cs->nth(i),NotBasic,this));
 }
 
-void CgenClassTable::install_classtags(int len) {
+void CgenClassTable::install_classtags() {
     int curr_tag = 0;
-    CgenNodeP curr_cgennode;
+    CgenNodeP curr_cgennode = name_to_cgen_map_[Object];
+    /*
     for (List<CgenNode> *l = nds; l; l = l->tl()) { // 将其中的CgenNode逐个进行设置
         // 设置该node的tag
         curr_cgennode = l->hd();
@@ -845,7 +847,35 @@ void CgenClassTable::install_classtags(int len) {
             intclasstag = curr_tagno;
         }
         curr_tag++;
-    }
+    }*/
+    std::function<void(CgenNodeP)> dfs_set_tags = [&](CgenNodeP curr_cgen) {
+        curr_cgen->set_classtag(curr_tag);
+        class_tag_map_[curr_tag] = curr_cgen->get_name();
+        // str << "# set the class " << curr_cgen->get_name() << " the tag is " << curr_tag << endl;
+        Symbol curr_name = curr_cgen->get_name();
+        if (curr_name == Str) {
+            stringclasstag = curr_tag;
+        } else if (curr_name == Bool) {
+            boolclasstag = curr_tag;
+        } else if (curr_name == Int) {
+            intclasstag = curr_tag;
+        }
+        curr_tag++;
+        for (List<CgenNode> *l = curr_cgen->get_children(); l; l = l->tl()) { // 遍历子节点
+            dfs_set_tags(l->hd());
+        }
+    };
+    std::function<int(CgenNodeP)> set_des_cnt = [&](CgenNodeP curr_cgen) {
+        int des_cnt = 1; // 包括自己
+        for (List<CgenNode> *l = curr_cgen->get_children(); l; l = l->tl()) {
+            des_cnt += set_des_cnt(l->hd());
+        }
+        // str << "#the dec cnt of " << curr_cgen->get_name() << " is " << des_cnt << endl;
+        curr_cgen->set_descendants_cnt(des_cnt);
+        return des_cnt;
+    };
+    dfs_set_tags(curr_cgennode);
+    set_des_cnt(curr_cgennode); // 设置desc cnt求子孙的数量
 }
 
 void CgenClassTable::install_attrs_and_methods() {
@@ -1366,37 +1396,57 @@ void typcase_class::code(ostream &s) {
 
     // 判断该expr是否是void类型的
     emit_bne(ACC, ZERO, no_void_lebal, s);
+
     // 处理错误的情况
     s << LA << ACC << " str_const0" << endl;
     emit_load_imm(T1, get_line_number(), s);
     emit_jal("_case_abort2", s);
 
     emit_label_def(no_void_lebal, s);
+    emit_load(T1, TAG_OFFSET, ACC, s); // 获取expr对应的tag
 
-    std::vector<CgenNodeP> sorted_cgens;
-    sorted_cgens.reserve(cases->len());
+    std::vector<Case> sorted_cases;
+    sorted_cases.reserve(cases->len());
 
     Case curr_case;
     for (int i = cases->first(); cases->more(i); i = cases->next(i)) {
         curr_case = cases->nth(i);
-        sorted_cgens.push_back(codegen_classtable->get_cgennode(curr_case->get_type()));
+        sorted_cases.push_back(curr_case);
     }
     // 用来作为排序的条件
-    auto sort_comp = [&](CgenNodeP a, CgenNodeP b)-> bool {
-        return a->get_chain_depth() > b->get_chain_depth();
+    std::function<bool(Case, Case)> sort_comp = [&](Case a, Case b)-> bool {
+        return codegen_classtable->get_cgennode(a->get_type_decl())->get_chain_depth() >
+            codegen_classtable->get_cgennode(b->get_type_decl())->get_chain_depth();
     };
-    std::sort(sorted_cgens.begin(), sorted_cgens.end(), sort_comp);
-    // 排完序后查找expr所处的depth为多少
-    for (auto cgen : sorted_cgens) {
-        Symbol cgen_type = cgen->get_name();
+    std::sort(sorted_cases.begin(), sorted_cases.end(), sort_comp);
 
+    for (auto case_class : sorted_cases) {
+        Symbol cgen_type = case_class->get_type_decl();
+        CgenNodeP cgen = codegen_classtable->get_cgennode(cgen_type);
+        int next_case_lebal = codegen_classtable->get_labelid_and_add(); // 获取新lebal
+        // 通过比较tag确定是否是后代
+        int start_tag = cgen->get_classtag();
+        int end_tag = start_tag + cgen->get_descendants_cnt();
+        emit_blti(T1, start_tag, next_case_lebal, s);
+        emit_bgti(T1, end_tag, next_case_lebal, s);
+        // 将expr对应的对象入栈
+        emit_push(ACC, s);
+        envTable->enterscope();
+        envTable->add_local_id(case_class->get_name());
 
+        case_class->get_expr()->code(s); // 生成代码
+
+        envTable->exitscope();
+        emit_addiu(SP, SP, 4, s);
+
+        emit_branch(out_lebal, s); // 结束跳转出去
+        emit_label_def(next_case_lebal, s); // 不做中间的处理
 
     }
+
     emit_label_def(notmatch_lebal, s);
     emit_jal("_case_abort", s);
     emit_label_def(out_lebal, s);
-
 }
 
 void block_class::code(ostream &s) {

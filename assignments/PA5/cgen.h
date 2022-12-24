@@ -71,7 +71,7 @@ private:
    void install_basic_classes();
    void install_class(CgenNodeP nd);
    void install_classes(Classes cs);
-   void install_classtags(int len);
+   void install_classtags();
    void install_attrs_and_methods();
    void install_name_to_cgen();
    void build_inheritance_tree();
@@ -177,6 +177,7 @@ class CgenNode : public class__class { // 每一个都对应一个class
 private:
    int chain_depth_;
    int class_tag_;
+   int descendants_cnt_; // dfs树中子孙的数量, 在typcase中有用
    CgenNodeP parentnd;                        // Parent of class
    List<CgenNode> *children;                  // Children of class
    Basicness basic_status;                    // `Basic' if class is basic
@@ -191,8 +192,10 @@ public:
    void set_parentnd(CgenNodeP p);
    void set_classtag(int tag) { class_tag_ = tag; }
    void set_chain_depth(int depth) { chain_depth_ = depth; }
+   void set_descendants_cnt(int descnt) { descendants_cnt_ = descnt; }
    int get_classtag() const { return class_tag_; }
    int get_chain_depth() const { return chain_depth_; }
+   int get_descendants_cnt() const { return  descendants_cnt_; }
    CgenNodeP get_parentnd() { return parentnd; }
    std::vector<CgenNodeP> get_parents_list();
 
