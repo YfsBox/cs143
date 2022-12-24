@@ -29,6 +29,8 @@
 extern void emit_string_constant(ostream& str, char *s);
 extern int cgen_debug;
 
+#define DEBUG_FLAG "debug_flag\n"
+
 //
 // Three symbols from the semantic analyzer (semant.cc) are used.
 // If e : No_type, then no code is generated for e.
@@ -377,7 +379,20 @@ static void emit_end_frame(ostream &s) {
     emit_load(SELF, 2, SP, s);
     emit_load(RA, 1, SP, s);
     emit_addiu(SP, SP, 12, s);
-    // emit_return(s);
+}
+
+static void emit_abort(int lebal, int lineno, ostream &s) {
+    emit_bne(ACC, ZERO, lebal, s);
+    s << LA << ACC << " str_const0" << endl;
+    emit_load_imm(T1, lineno, s);
+    emit_jal("_dispatch_abort", s);
+}
+
+static void emit_gc_update(char *src, int offset, ostream &s) {
+    if (cgen_Memmgr == GC_GENGC) {
+        emit_addiu(A1, src, WORD_SIZE * offset, s);
+        emit_gc_assign(s);
+   }
 }
 
 static void emit_load_t1_t2(ostream &s, Expression e1, Expression e2) {
@@ -387,6 +402,17 @@ static void emit_load_t1_t2(ostream &s, Expression e1, Expression e2) {
 
     emit_load(T1, 1, SP, s);
     emit_move(T2, ACC, s);
+    emit_addiu(SP, SP, 4, s);
+}
+
+static void emit_breakpoint_debug(ostream &s) {
+    StringEntry* strentry = stringtable.lookup_string(DEBUG_FLAG);
+    emit_push(ACC, s); // 保存现有的ACC
+    emit_load_string(ACC, strentry, s);
+    emit_push(ACC, s);
+    emit_jal("IO.out_string", s);
+    emit_addiu(SP, SP, 4, s);
+    emit_load(ACC, 1, SP, s); // 恢复
     emit_addiu(SP, SP, 4, s);
 }
 
@@ -641,9 +667,10 @@ void CgenClassTable::code_constants()
   // Add constants that are required by the code generator.
   //
   stringtable.add_string("");
+  stringtable.add_string(DEBUG_FLAG); // 用来调试用的
   inttable.add_string("0");
-  stringtable.code_string_table(str,stringclasstag);
-  inttable.code_string_table(str,intclasstag);
+  stringtable.code_string_table(str, stringclasstag);
+  inttable.code_string_table(str, intclasstag);
   code_bools(boolclasstag);
 }
 
@@ -830,24 +857,7 @@ void CgenClassTable::install_classes(Classes cs)
 void CgenClassTable::install_classtags() {
     int curr_tag = 0;
     CgenNodeP curr_cgennode = name_to_cgen_map_[Object];
-    /*
-    for (List<CgenNode> *l = nds; l; l = l->tl()) { // 将其中的CgenNode逐个进行设置
-        // 设置该node的tag
-        curr_cgennode = l->hd();
-        int curr_tagno = len - curr_tag - 1;
-        Symbol cgennode_name = curr_cgennode->get_name();
-        curr_cgennode->set_classtag(curr_tagno);
-        class_tag_map_[curr_tagno] = cgennode_name;
 
-        if (cgennode_name == Str) {
-            stringclasstag = curr_tagno;
-        } else if (cgennode_name == Bool) {
-            boolclasstag = curr_tagno;
-        } else if (cgennode_name == Int) {
-            intclasstag = curr_tagno;
-        }
-        curr_tag++;
-    }*/
     std::function<void(CgenNodeP)> dfs_set_tags = [&](CgenNodeP curr_cgen) {
         curr_cgen->set_classtag(curr_tag);
         class_tag_map_[curr_tag] = curr_cgen->get_name();
@@ -908,8 +918,7 @@ void CgenClassTable::install_attrs_and_methods() {
             auto methods = class_method_map_[parent->get_name()];
             for (auto method : methods) {  // 获取其中的method
                 Symbol meth_name = method->get_name();
-                //dispatch_tab_map_[curr_name].push_back({parent->get_name(), meth_name});
-                // meth_offset_map_[curr_name][meth_name] = curr_offset++;
+
                 if (meth_offset_map_[curr_name].find(meth_name) == meth_offset_map_[curr_name].end()) {
                     dispatch_tab_map_[curr_name].push_back({parent->get_name(), meth_name});
                     meth_offset_map_[curr_name][meth_name] = dispatch_tab_map_[curr_name].size() - 1;
@@ -995,12 +1004,13 @@ void CgenClassTable::code_class_nametabs() {
 }
 
 void CgenClassTable::code_class_objtabs() {
+
     str << CLASSOBJTAB << LABEL;
-    List<CgenNode> *nd_list = nds;
-    CgenNode *head;
-    while (nd_list) {
-        head = nd_list->hd();
-        Symbol name = head->get_name();
+    int len = class_tag_map_.size();
+
+    StringEntry* str_entry;
+    for (int i = 0; i < len; i++) {
+        Symbol name = class_tag_map_[i];
         str << WORD;
         emit_protobj_ref(name, str);
         str << endl;
@@ -1008,9 +1018,8 @@ void CgenClassTable::code_class_objtabs() {
         str << WORD;
         emit_init_ref(name, str);
         str << endl;
-
-        nd_list = nd_list->tl();
     }
+
 }
 
 bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int *offset) {
@@ -1030,7 +1039,6 @@ bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int 
 
 bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
     if (meth_offset_map_.find(cls) == meth_offset_map_.end()) {
-        // std::cout << "find cls error\n";
         return false;
     }
     auto find_meth = meth_offset_map_[cls].find(meth);
@@ -1045,29 +1053,7 @@ bool CgenClassTable::get_meth_offset(Symbol cls, Symbol meth, int *offset) {
 void CgenClassTable::code_object_disptabs() {
     List<CgenNode> *nd_list = nds;
     CgenNode *head;
-    /*
-    while (nd_list) {
-        head = nd_list->hd();
-        // Symbol name = head->get_name()
-        std::vector<CgenNodeP> parents = head->get_parents_list();
-        Features curr_features;
-        emit_disptable_ref(head->get_name(), str);
-        str << LABEL;
-        for (auto pait = parents.begin(); pait != parents.end(); ++pait) { //需要遍历父类中的method
-            curr_features = (*pait)->get_features();
-            // 遍历其中的method
-            Feature curr_feature;
-            for (int i = curr_features->first(); curr_features->more(i); i = curr_features->next(i)) {
-                curr_feature = curr_features->nth(i);
-                if (curr_feature->is_method()) {
-                    str << WORD;
-                    emit_method_ref((*pait)->get_name(), curr_feature->get_name(), str);
-                    str << endl;
-                }
-            }
-        }
-        nd_list = nd_list->tl();
-    }*/
+
     for (auto &[class_name, distab] : dispatch_tab_map_) {
         emit_disptable_ref(class_name, str);
         str << LABEL;
@@ -1157,10 +1143,11 @@ void CgenClassTable::code_object_inits() {
         for (auto attr : curr_attrs) {
             Expression init_expr = attr->get_init();
             Symbol attr_type = attr->get_type();
-            if (!init_expr->is_empty()) { // 如果是空的,就设置为默认的初始化值
+            if (!init_expr->is_empty()) {
                 init_expr->code(str);
                 int attr_off = attr_offset_map_[curr_cgen->get_name()][attr->get_name()];
                 emit_store(ACC, attr_off, SELF, str);
+                emit_gc_update(SELF, attr_off, str);
             }
         }
         emit_move(ACC, SELF, str);
@@ -1278,24 +1265,20 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
 //
 //*****************************************************************
 
-static void emit_abort(int lebal, int lineno, ostream &s) {
-    emit_bne(ACC, ZERO, lebal, s);
-    s << LA << ACC << " str_const0" << endl;
-    emit_load_imm(T1, lineno, s);
-    emit_jal("_dispatch_abort", s);
-}
-
 void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
-    s << "# assign class coding\n";
+    // s << "# assign class coding\n";
     expr->code(s);
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
     int offset;
     if (envTable->lookup(name, &offset)) {
+        s << "# gc from fp loacl " << offset << endl;
         emit_store(ACC, offset, FP, s);
+        emit_gc_update(FP, offset, s);
         return;
     }
     if (codegen_classtable->get_attr_offset(curr_cgen->get_name(), name, &offset)) { // 属于attr类型的
         emit_store(ACC, offset, SELF, s);
+        emit_gc_update(SELF, offset, s);
     }
 }
 
@@ -1346,7 +1329,9 @@ void dispatch_class::code(ostream &s) {
     if (expr_type == SELF_TYPE) {
         expr_type = codegen_classtable->get_curr_class()->get_name();
     }
+    s << "# the name is " << expr_type << endl;
     codegen_classtable->get_meth_offset(expr_type, name, &offset);
+    s << "# the offset is " << offset << " in " << expr_type << " method is " << name << endl;
     emit_load(T1, offset, T1, s); // 获取该dispatch在表中的地址
 
     emit_jalr(T1, s);
@@ -1421,6 +1406,7 @@ void typcase_class::code(ostream &s) {
     std::sort(sorted_cases.begin(), sorted_cases.end(), sort_comp);
 
     for (auto case_class : sorted_cases) {
+        // emit_branch(out_lebal, s);
         Symbol cgen_type = case_class->get_type_decl();
         CgenNodeP cgen = codegen_classtable->get_cgennode(cgen_type);
         int next_case_lebal = codegen_classtable->get_labelid_and_add(); // 获取新lebal
@@ -1440,7 +1426,7 @@ void typcase_class::code(ostream &s) {
         emit_addiu(SP, SP, 4, s);
 
         emit_branch(out_lebal, s); // 结束跳转出去
-        emit_label_def(next_case_lebal, s); // 不做中间的处理
+        emit_label_def(next_case_lebal, s); // 不做中间的处理*/
 
     }
 
@@ -1482,7 +1468,7 @@ void let_class::code(ostream &s) {
 }
 
 void plus_class::code(ostream &s) {
-    s << "# coding plus class\n";
+    // s << "# coding plus class\n";
     e1->code(s);  // 返回到a0的结果是一个表示Intconst的label，也就是lebal
     emit_push(ACC, s);      // 其结果是Int对象的地址
     e2->code(s);
@@ -1620,7 +1606,7 @@ void int_const_class::code(ostream& s) { // 加载的仅仅是地址,也就是�
   //
   // Need to be sure we have an IntEntry *, not an arbitrary Symbol
   //
-  s << "# the int const is " << token << endl;
+  // s << "# the int const is " << token << endl;
   IntEntry *int_entry = inttable.lookup_string(token->get_string());
   emit_load_int(ACC, int_entry, s); // load $a0 int_constxx
 }
@@ -1640,25 +1626,29 @@ void new__class::code(ostream &s) {
         // 首先获取此时的class
         // CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
         // object_name = curr_cgen->get_name()->get_string(),不可以使用curr_class类似的方式
-        emit_load(T1, 0, SELF, s); // 首先获取class tag
+        emit_load(T1, 0, ACC, s); // 首先获取class tag
         emit_load_address(T2, CLASSOBJTAB, s); // 获取objtab
 
         emit_sll(T1, T1, 3, s); //获取了offset
 
-        emit_add(ACC, T1, T2, s); // 获取的对应的proobj地址
+        emit_add(T2, T1, T2, s); // 获取的对应的proobj地址
+        emit_load(ACC, 0, T2, s); // 地址中的内容
         emit_jal("Object.copy", s);
 
-        emit_move(T1, ACC, s); // 对应的proobj地址
-        emit_addiu(T1, T1, 4, s); //获取对应的init的地址
+        emit_load(T1, 0, ACC, s); // 首先获取class tag
+        emit_load_address(T2, CLASSOBJTAB, s);
 
-        emit_jal(T1, s); // 跳转到init地址处
+        emit_sll(T1, T1, 3, s);
+
+        emit_add(T2, T1, T2, s); // 获取的对应的proobj地址
+        emit_load(A1, 1, T2, s); // 地址中的内容
+        emit_jalr(A1, s);
+
     } else {
         std::string protobj_object = object_name + PROTOBJ_SUFFIX;
-        s << "# object protobj is " << protobj_object << endl;
         emit_load_address(ACC, const_cast<char *>(protobj_object.c_str()), s);
         emit_jal("Object.copy", s);
         std::string init_object = object_name + CLASSINIT_SUFFIX;
-        s << "# init protobj is " << init_object << endl;
         emit_jal(const_cast<char *>(init_object.c_str()), s);
     }
 }
@@ -1680,21 +1670,24 @@ void no_expr_class::code(ostream &s) { // 相当于返回0
 }
 
 void object_class::code(ostream &s) {
-    s << "# object class coding\n";
+    // s << "# object class coding\n";
     if (name == self) {
         emit_move(ACC, SELF, s);
-        s << "# object return self\n";
+        // s << "# object return self\n";
         return;
     }
     // 如果是当前class中的attr
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
     int offset;
     if (envTable->lookup(name, &offset)) {
+        s << "# gc from fp loacl " << offset << endl;
         emit_load(ACC, offset, FP, s);
+        emit_gc_update(FP, offset, s);
         return;
     }
     if (codegen_classtable->get_attr_offset(curr_cgen->get_name(), name, &offset)) { // 属于attr类型的
         emit_load(ACC, offset, SELF, s);
+        emit_gc_update(SELF, offset, s);
     }
 }
 
