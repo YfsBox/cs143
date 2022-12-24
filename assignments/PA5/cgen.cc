@@ -662,6 +662,7 @@ curr_cgenclass_(nullptr)
    install_classes(classes);
    install_classtags(classes->len() + 5);
    build_inheritance_tree();
+   install_name_to_cgen();
    install_attrs_and_methods();
 
    code();
@@ -888,9 +889,18 @@ void CgenClassTable::install_attrs_and_methods() {
                 }
             }
         }
+        curr_cgennode->set_chain_depth(chain.size());
+        parent_chain_map_[curr_name] = std::move(chain);
    }
 }
 
+void CgenClassTable::install_name_to_cgen() {
+    CgenNodeP curr_cgen;
+    for (List<CgenNode> *l = nds; l; l = l->tl()) {
+        curr_cgen = l->hd();
+        name_to_cgen_map_[curr_cgen->get_name()] = curr_cgen;
+    }
+}
 //
 // CgenClassTable::build_inheritance_tree
 //
@@ -1218,6 +1228,7 @@ CgenNodeP CgenClassTable::root()
 
 CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
    class__class((const class__class &) *nd),
+   chain_depth_(0),
    class_tag_(0),
    parentnd(NULL),
    children(NULL),
@@ -1268,8 +1279,7 @@ void static_dispatch_class::code(ostream &s) {
     }
     expr->code(s);
 
-    int lebalid = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int lebalid = codegen_classtable->get_labelid_and_add();
 
     emit_abort(lebalid, get_line_number(), s);
 
@@ -1295,8 +1305,7 @@ void dispatch_class::code(ostream &s) {
     }
     expr->code(s); // 求出来self所对应的指针
 
-    int lebalid = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int lebalid = codegen_classtable->get_labelid_and_add();
     // 判断该expr是否为abort
     emit_abort(lebalid, get_line_number(), s);
 
@@ -1319,10 +1328,8 @@ void cond_class::code(ostream &s) {
     emit_load(T1, ATTR_BASE_OFFSET, ACC, s); // t1中也就是对应的value
     emit_move(T2, ZERO, s); // T2中是0
 
-    int out_lebal = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
-    int false_lebal = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int out_lebal = codegen_classtable->get_labelid_and_add();
+    int false_lebal = codegen_classtable->get_labelid_and_add();
 
     emit_beq(T1, T2, false_lebal, s);
     // 对应的是true
@@ -1335,10 +1342,8 @@ void cond_class::code(ostream &s) {
 }
 
 void loop_class::code(ostream &s) {
-    int start_lebal = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
-    int end_lebal = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int start_lebal = codegen_classtable->get_labelid_and_add();
+    int end_lebal = codegen_classtable->get_labelid_and_add();
 
     emit_label_def(start_lebal, s);
     pred->code(s);
@@ -1353,6 +1358,45 @@ void loop_class::code(ostream &s) {
 }
 
 void typcase_class::code(ostream &s) {
+    expr->code(s);
+
+    int no_void_lebal = codegen_classtable->get_labelid_and_add();
+    int out_lebal = codegen_classtable->get_labelid_and_add();
+    int notmatch_lebal = codegen_classtable->get_labelid_and_add();
+
+    // 判断该expr是否是void类型的
+    emit_bne(ACC, ZERO, no_void_lebal, s);
+    // 处理错误的情况
+    s << LA << ACC << " str_const0" << endl;
+    emit_load_imm(T1, get_line_number(), s);
+    emit_jal("_case_abort2", s);
+
+    emit_label_def(no_void_lebal, s);
+
+    std::vector<CgenNodeP> sorted_cgens;
+    sorted_cgens.reserve(cases->len());
+
+    Case curr_case;
+    for (int i = cases->first(); cases->more(i); i = cases->next(i)) {
+        curr_case = cases->nth(i);
+        sorted_cgens.push_back(codegen_classtable->get_cgennode(curr_case->get_type()));
+    }
+    // 用来作为排序的条件
+    auto sort_comp = [&](CgenNodeP a, CgenNodeP b)-> bool {
+        return a->get_chain_depth() > b->get_chain_depth();
+    };
+    std::sort(sorted_cgens.begin(), sorted_cgens.end(), sort_comp);
+    // 排完序后查找expr所处的depth为多少
+    for (auto cgen : sorted_cgens) {
+        Symbol cgen_type = cgen->get_name();
+
+
+
+    }
+    emit_label_def(notmatch_lebal, s);
+    emit_jal("_case_abort", s);
+    emit_label_def(out_lebal, s);
+
 }
 
 void block_class::code(ostream &s) {
@@ -1379,7 +1423,7 @@ void let_class::code(ostream &s) {
     // 然后进入新的frame,并加入变量，但是这个偏移量是需要调整的
     emit_push(ACC, s); // 将init对应的变量,也就是let定义的变量加入到其中
     envTable->enterscope();
-    envTable->add_local_id(identifier);
+    envTable->add_local_id(identifier);  // 加入到其中
 
     body->code(s);
 
@@ -1465,8 +1509,7 @@ void lt_class::code(ostream &s) { // 一般对应了Int之间的大小比较
     emit_load(T1, ATTR_BASE_OFFSET, T1, s);
     emit_load(T2, ATTR_BASE_OFFSET, T2, s);
     // 创建标签
-    int out_lebal = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int out_lebal = codegen_classtable->get_labelid_and_add();
 
     emit_load_bool(ACC, truebool, s);
     emit_blt(T1, T2, out_lebal, s);
@@ -1488,8 +1531,8 @@ void eq_class::code(ostream &s) {
         return;
     }
     // 比较地址，比较不过就退出, 可以确定的是T1和T2不会受到干扰
-    int lebalid = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int lebalid = codegen_classtable->get_labelid_and_add();
+
     emit_load_bool(ACC, truebool, s);
     emit_beq(T1, T2, lebalid, s);
     emit_load_bool(ACC, falsebool, s);
@@ -1503,8 +1546,7 @@ void leq_class::code(ostream &s) {
     emit_load(T1, ATTR_BASE_OFFSET, T1, s);
     emit_load(T2, ATTR_BASE_OFFSET, T2, s);
 
-    int lebalid = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int lebalid = codegen_classtable->get_labelid_and_add();
 
     emit_load_bool(ACC, truebool, s);
     emit_bleq(T1, T2, lebalid, s);
@@ -1516,8 +1558,7 @@ void comp_class::code(ostream &s) {
     e1->code(s);
     emit_load(T1, ATTR_BASE_OFFSET, ACC, s); // 获取其中的val
 
-    int lebalid = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int lebalid = codegen_classtable->get_labelid_and_add();
 
     emit_load_bool(ACC, truebool, s);
     emit_beq(T1, ZERO, lebalid, s);
@@ -1535,6 +1576,7 @@ void int_const_class::code(ostream& s) { // 加载的仅仅是地址,也就是�
 }
 
 void string_const_class::code(ostream& s) {
+  // s << "# the string const is " << token << endl;
   emit_load_string(ACC,stringtable.lookup_string(token->get_string()),s);
 }
 
@@ -1546,24 +1588,36 @@ void new__class::code(ostream &s) {
     std::string object_name = type_name->get_string();
     if (type_name == SELF_TYPE) {
         // 首先获取此时的class
-        CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
-        object_name = curr_cgen->get_name()->get_string();
+        // CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
+        // object_name = curr_cgen->get_name()->get_string(),不可以使用curr_class类似的方式
+        emit_load(T1, 0, SELF, s); // 首先获取class tag
+        emit_load_address(T2, CLASSOBJTAB, s); // 获取objtab
+
+        emit_sll(T1, T1, 3, s); //获取了offset
+
+        emit_add(ACC, T1, T2, s); // 获取的对应的proobj地址
+        emit_jal("Object.copy", s);
+
+        emit_move(T1, ACC, s); // 对应的proobj地址
+        emit_addiu(T1, T1, 4, s); //获取对应的init的地址
+
+        emit_jal(T1, s); // 跳转到init地址处
+    } else {
+        std::string protobj_object = object_name + PROTOBJ_SUFFIX;
+        s << "# object protobj is " << protobj_object << endl;
+        emit_load_address(ACC, const_cast<char *>(protobj_object.c_str()), s);
+        emit_jal("Object.copy", s);
+        std::string init_object = object_name + CLASSINIT_SUFFIX;
+        s << "# init protobj is " << init_object << endl;
+        emit_jal(const_cast<char *>(init_object.c_str()), s);
     }
-    std::string protobj_object = object_name + PROTOBJ_SUFFIX;
-    s << "# object protobj is " << protobj_object << endl;
-    emit_load_address(ACC, const_cast<char *>(protobj_object.c_str()), s);
-    emit_jal("Object.copy", s);
-    std::string init_object = object_name + CLASSINIT_SUFFIX;
-    s << "# init protobj is " << init_object << endl;
-    emit_jal(const_cast<char *>(init_object.c_str()), s);
 }
 
 void isvoid_class::code(ostream &s) {
     e1->code(s);
     emit_move(T1, ACC, s);
 
-    int lebal_id = codegen_classtable->get_labelid();
-    codegen_classtable->add_labelid();
+    int lebal_id = codegen_classtable->get_labelid_and_add();
     // 验证T1是否是0
     emit_load_bool(ACC, truebool, s);
     emit_beq(T1, ZERO, lebal_id, s); // 如果是void

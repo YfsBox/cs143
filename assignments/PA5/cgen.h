@@ -26,14 +26,18 @@ public:
     typedef std::map<Symbol, int> attroffsetList;
     typedef std::map<Symbol, int> methoffsetList;
     typedef std::vector<std::pair<Symbol, Symbol>> dispatchtab;
+    typedef std::vector<CgenNodeP> chain;
 private:
    List<CgenNode> *nds;     // 维护的整个程序中的所有class
    std::map<int, Symbol> class_tag_map_;
+   std::map<Symbol, CgenNodeP> name_to_cgen_map_;
    std::map<Symbol, attrList> class_attr_map_;  // 不包含parent中的attr
    std::map<Symbol, methodList> class_method_map_; // 每个class本层method
    std::map<Symbol, attroffsetList> attr_offset_map_;
    std::map<Symbol, methoffsetList> meth_offset_map_;
    std::map<Symbol, dispatchtab> dispatch_tab_map_;
+   std::map<Symbol, chain> parent_chain_map_;
+
    ostream& str;
    int stringclasstag;
    int intclasstag;
@@ -69,22 +73,21 @@ private:
    void install_classes(Classes cs);
    void install_classtags(int len);
    void install_attrs_and_methods();
+   void install_name_to_cgen();
    void build_inheritance_tree();
    void set_relations(CgenNodeP nd);
 
 public:
    CgenClassTable(Classes, ostream& str);
-   int get_labelid() const { return labelid_; }
-   void add_labelid() { labelid_++; }
+   int get_labelid_and_add() { return labelid_++; }
+
+   CgenNodeP get_cgennode(Symbol name) { return name_to_cgen_map_[name]; }
    CgenNodeP get_curr_class() const { return curr_cgenclass_; }
+
    bool get_attr_offset(Symbol cls, Symbol attr, int *offset);
    bool get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int *offset);
    bool get_meth_offset(Symbol cls, Symbol meth, int *offset);
    // 一些用来测试的函数
-   /*void test_meth_offset() {
-       for (auto )
-
-   }*/
 
    ostream& codege_str() {
        return str;
@@ -172,6 +175,7 @@ bool EnvTable::lookup(Symbol name, int *offset) {
 
 class CgenNode : public class__class { // 每一个都对应一个class
 private:
+   int chain_depth_;
    int class_tag_;
    CgenNodeP parentnd;                        // Parent of class
    List<CgenNode> *children;                  // Children of class
@@ -186,7 +190,9 @@ public:
    List<CgenNode> *get_children() { return children; }
    void set_parentnd(CgenNodeP p);
    void set_classtag(int tag) { class_tag_ = tag; }
+   void set_chain_depth(int depth) { chain_depth_ = depth; }
    int get_classtag() const { return class_tag_; }
+   int get_chain_depth() const { return chain_depth_; }
    CgenNodeP get_parentnd() { return parentnd; }
    std::vector<CgenNodeP> get_parents_list();
 
