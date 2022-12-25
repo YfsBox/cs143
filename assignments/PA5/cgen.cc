@@ -1131,6 +1131,7 @@ void CgenClassTable::code_object_inits() {
         emit_init_ref(curr_cgen->get_name(), str);
         str << LABEL;
         emit_start_frame(str);
+        envTable->enterframe();
 
         CgenNodeP parent = curr_cgen->get_parentnd();
         if (parent && parent->get_name() != No_class) {
@@ -1152,6 +1153,7 @@ void CgenClassTable::code_object_inits() {
         }
         emit_move(ACC, SELF, str);
         emit_end_frame(str);
+        envTable->exitframe();
         emit_return(str);
     }
 }
@@ -1266,12 +1268,10 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
 //*****************************************************************
 
 void assign_class::code(ostream &s) { // 如何体现assign操作的呢?
-    // s << "# assign class coding\n";
     expr->code(s);
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
     int offset;
     if (envTable->lookup(name, &offset)) {
-        s << "# gc from fp loacl " << offset << endl;
         emit_store(ACC, offset, FP, s);
         emit_gc_update(FP, offset, s);
         return;
@@ -1329,9 +1329,7 @@ void dispatch_class::code(ostream &s) {
     if (expr_type == SELF_TYPE) {
         expr_type = codegen_classtable->get_curr_class()->get_name();
     }
-    s << "# the name is " << expr_type << endl;
     codegen_classtable->get_meth_offset(expr_type, name, &offset);
-    s << "# the offset is " << offset << " in " << expr_type << " method is " << name << endl;
     emit_load(T1, offset, T1, s); // 获取该dispatch在表中的地址
 
     emit_jalr(T1, s);
@@ -1378,7 +1376,6 @@ void typcase_class::code(ostream &s) {
     int no_void_lebal = codegen_classtable->get_labelid_and_add();
     int out_lebal = codegen_classtable->get_labelid_and_add();
     int notmatch_lebal = codegen_classtable->get_labelid_and_add();
-
     // 判断该expr是否是void类型的
     emit_bne(ACC, ZERO, no_void_lebal, s);
 
@@ -1414,7 +1411,7 @@ void typcase_class::code(ostream &s) {
         int start_tag = cgen->get_classtag();
         int end_tag = start_tag + cgen->get_descendants_cnt();
         emit_blti(T1, start_tag, next_case_lebal, s);
-        emit_bgti(T1, end_tag, next_case_lebal, s);
+        emit_bgti(T1, end_tag - 1, next_case_lebal, s);
         // 将expr对应的对象入栈
         emit_push(ACC, s);
         envTable->enterscope();
@@ -1606,13 +1603,11 @@ void int_const_class::code(ostream& s) { // 加载的仅仅是地址,也就是�
   //
   // Need to be sure we have an IntEntry *, not an arbitrary Symbol
   //
-  // s << "# the int const is " << token << endl;
   IntEntry *int_entry = inttable.lookup_string(token->get_string());
   emit_load_int(ACC, int_entry, s); // load $a0 int_constxx
 }
 
 void string_const_class::code(ostream& s) {
-  // s << "# the string const is " << token << endl;
   emit_load_string(ACC,stringtable.lookup_string(token->get_string()),s);
 }
 
@@ -1670,17 +1665,14 @@ void no_expr_class::code(ostream &s) { // 相当于返回0
 }
 
 void object_class::code(ostream &s) {
-    // s << "# object class coding\n";
     if (name == self) {
         emit_move(ACC, SELF, s);
-        // s << "# object return self\n";
         return;
     }
     // 如果是当前class中的attr
     CgenNodeP curr_cgen = codegen_classtable->get_curr_class();
     int offset;
     if (envTable->lookup(name, &offset)) {
-        s << "# gc from fp loacl " << offset << endl;
         emit_load(ACC, offset, FP, s);
         emit_gc_update(FP, offset, s);
         return;
