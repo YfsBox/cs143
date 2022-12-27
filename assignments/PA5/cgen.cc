@@ -827,7 +827,6 @@ bool CgenClassTable::get_attr_offset(Symbol cls, Symbol attr, int *offset) {
     *offset = attr_offset_map_[cls][attr];
     return true;
 }
-
 // CgenClassTable::install_class
 // CgenClassTable::install_classes
 //
@@ -880,8 +879,7 @@ void CgenClassTable::install_classtags() {
         for (List<CgenNode> *l = curr_cgen->get_children(); l; l = l->tl()) {
             des_cnt += set_des_cnt(l->hd());
         }
-        // str << "#the dec cnt of " << curr_cgen->get_name() << " is " << des_cnt << endl;
-        curr_cgen->set_descendants_cnt(des_cnt);
+        curr_cgen->set_descendants_cnt(des_cnt - 1);
         return des_cnt;
     };
     dfs_set_tags(curr_cgennode);
@@ -900,14 +898,12 @@ void CgenClassTable::install_attrs_and_methods() {
             curr_feature = curr_features->nth(i);
             if (curr_feature->is_method()) {
                 class_method_map_[curr_cgen_name].push_back(static_cast<method_class*>(curr_feature));
-                // auto find_meth_it = meth_offset_map_[curr_cgen_name].find(curr_feature->get_name());
             } else {
                 class_attr_map_[curr_cgennode->get_name()].push_back(static_cast<attr_class*>(curr_feature));
             }
         }
     }
     // 设置meth_offset_map
-
    for (List<CgenNode> *l = nds; l; l = l->tl()) {
         curr_cgennode = l->hd();
         Symbol curr_name = curr_cgennode->get_name();
@@ -1000,7 +996,6 @@ void CgenClassTable::code_class_nametabs() {
         str_entry->code_ref(str);
         str << endl;
     }
-
 }
 
 void CgenClassTable::code_class_objtabs() {
@@ -1019,7 +1014,6 @@ void CgenClassTable::code_class_objtabs() {
         emit_init_ref(name, str);
         str << endl;
     }
-
 }
 
 bool CgenClassTable::get_meth_offset(Symbol cls1, Symbol cls2, Symbol meth, int *offset) {
@@ -1321,7 +1315,6 @@ void dispatch_class::code(ostream &s) {
     int lebalid = codegen_classtable->get_labelid_and_add();
     // 判断该expr是否为abort
     emit_abort(lebalid, get_line_number(), s);
-
     emit_label_def(lebalid, s);
     emit_load(T1, DISPTABLE_OFFSET, ACC, s); // 将dispacth表加载到T1中
     int offset;
@@ -1411,7 +1404,7 @@ void typcase_class::code(ostream &s) {
         int start_tag = cgen->get_classtag();
         int end_tag = start_tag + cgen->get_descendants_cnt();
         emit_blti(T1, start_tag, next_case_lebal, s);
-        emit_bgti(T1, end_tag - 1, next_case_lebal, s);
+        emit_bgti(T1, end_tag, next_case_lebal, s);
         // 将expr对应的对象入栈
         emit_push(ACC, s);
         envTable->enterscope();

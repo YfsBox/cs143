@@ -67,7 +67,6 @@ private:
 // a list of classes.  The graph is implemented as
 // a tree of `CgenNode', and class names are placed
 // in the base class symbol table.
-
    void install_basic_classes();
    void install_class(CgenNodeP nd);
    void install_classes(Classes cs);
@@ -112,11 +111,9 @@ private:
         local_fp_offset_ = -1;
         last_local_fp_offset_ = -1;
     }
-
 public:
     EnvTable() = default;
     ~EnvTable() = default;
-
     void enterframe();
     void exitframe();
     void enterscope();

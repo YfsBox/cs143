@@ -525,11 +525,12 @@ void ClassTable::check_and_install() {
         std::set<Symbol> attr_set;
         // 根据继承链,来将所有的attr加入到object_env中,其中需要注意作用域
         Symbol chain_symbol;
+        objectEnv.enterscope();
         for (auto chain_node : chain) { // 从Object一直到该类自身,这一步仅仅是处理attr的声明,先加入符号表之中
             class__class *chain_class = dynamic_cast<class__class*> (chain_node);
             chain_symbol = chain_class->get_name();
             const std::list<attr_class*>& chain_attrs = attrs_table_[chain_symbol];
-            objectEnv.enterscope();
+            // objectEnv.enterscope();
             for (auto attr : chain_attrs) {
                 if (attr->get_name() == self) {
                     semant_error(attr) << "attr is self\n";
@@ -613,10 +614,10 @@ void ClassTable::check_and_install() {
             objectEnv.exitscope();
         }
         // 离开作用域，弹出
-        auto chain_depth = chain.size();
-        for (uint i = 0; i < chain_depth; i++) {
-            objectEnv.exitscope();
-        }
+        // auto chain_depth = chain.size();
+        // for (uint i = 0; i < chain_depth; i++) {
+        objectEnv.exitscope();
+        //}
     }
 }
 
